@@ -489,15 +489,6 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="container mx-auto px-4 max-w-5xl">
-        {/* Logo Secretaria da Saúde SP */}
-        <div className="text-center mb-8">
-          <img 
-            src="/logo-secretaria-saude-sp.svg" 
-            alt="Secretaria da Saúde - São Paulo" 
-            className="h-32 mx-auto mb-6"
-          />
-        </div>
-
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center justify-center gap-2">
             <Calculator className="h-8 w-8" />
