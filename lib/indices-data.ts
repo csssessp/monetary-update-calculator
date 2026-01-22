@@ -2,6 +2,9 @@ export interface IndiceData {
   mes: number
   ano: number
   valor: number
+  isReajusteIGPM?: boolean // Marcador para indicar reajuste IGP-M a cada 12 meses
+  indiceOriginal?: number // Índice original antes do reajuste IGP-M
+  igpmReajuste?: number // Valor do reajuste IGP-M acumulado
 }
 
 // Mantemos seu dataset local como fallback de confiabilidade.
