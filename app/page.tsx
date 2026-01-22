@@ -102,6 +102,16 @@ export default function CalculadoraAtualizacaoMonetaria() {
   const anos = Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i)
   const periodicidades = ["Mensal", "Anual", "Diário", "Trimestral", "Semestral"]
 
+  // Função para converter formato brasileiro (296.556,65) para número (296556.65)
+  const parseBrazilianNumber = (value: string): number => {
+    if (!value) return 0
+    // Remove espaços e converte formato brasileiro para padrão JS
+    // 296.556,65 → 296556.65
+    // 296,65 → 296.65
+    const normalized = value.trim().replace(/\./g, "").replace(",", ".")
+    return Number.parseFloat(normalized)
+  }
+
   const handleInputChange = (field: string, value: string | boolean) => {
     if (field.includes(".")) {
       const [parent, child] = field.split(".")
@@ -119,7 +129,8 @@ export default function CalculadoraAtualizacaoMonetaria() {
 
   const executarCalculo = async () => {
     const novosErros: string[] = []
-    if (!formData.valor || Number.parseFloat(formData.valor) <= 0) novosErros.push("Valor deve ser maior que zero")
+    const valorNumerico = parseBrazilianNumber(formData.valor)
+    if (!formData.valor || valorNumerico <= 0) novosErros.push("Valor deve ser maior que zero")
     if (!formData.dataInicial.dia || !formData.dataInicial.mes || !formData.dataInicial.ano)
       novosErros.push("Data inicial deve ser preenchida completamente")
     if (!formData.dataFinal.dia || !formData.dataFinal.mes || !formData.dataFinal.ano)
@@ -145,19 +156,19 @@ export default function CalculadoraAtualizacaoMonetaria() {
     const errosData = validarDatas(dataInicial, dataFinal)
 
     const parametros: ParametrosCalculo = {
-      valorOriginal: Number.parseFloat(formData.valor),
+      valorOriginal: valorNumerico,
       dataInicial,
       dataFinal,
       indice: formData.indice,
       correcaoProRata: formData.correcaoProRata,
-      taxaJuros: formData.taxaJuros ? Number.parseFloat(formData.taxaJuros) : undefined,
+      taxaJuros: formData.taxaJuros ? parseBrazilianNumber(formData.taxaJuros) : undefined,
       periodicidadeJuros: formData.periodicidadeJuros || undefined,
       tipoJuros: formData.tipoJuros || undefined,
       dataInicialJuros: formData.dataInicialJuros ? new Date(formData.dataInicialJuros) : undefined,
       dataFinalJuros: formData.dataFinalJuros ? new Date(formData.dataFinalJuros) : undefined,
-      percentualMulta: formData.percentualMulta ? Number.parseFloat(formData.percentualMulta) : undefined,
+      percentualMulta: formData.percentualMulta ? parseBrazilianNumber(formData.percentualMulta) : undefined,
       percentualHonorarios: formData.percentualHonorarios
-        ? Number.parseFloat(formData.percentualHonorarios)
+        ? parseBrazilianNumber(formData.percentualHonorarios)
         : undefined,
       multaSobreJuros: formData.multaSobreJuros,
     }
@@ -545,9 +556,8 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   </Label>
                   <Input
                     id="valor"
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
+                    type="text"
+                    placeholder="Ex: 296.556,65"
                     value={formData.valor}
                     onChange={(e) => handleInputChange("valor", e.target.value)}
                   />
@@ -701,9 +711,8 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   </Label>
                   <Input
                     id="taxaJuros"
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
+                    type="text"
+                    placeholder="Ex: 0,05"
                     value={formData.taxaJuros}
                     onChange={(e) => handleInputChange("taxaJuros", e.target.value)}
                   />
@@ -778,9 +787,8 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   </Label>
                   <Input
                     id="percentualMulta"
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
+                    type="text"
+                    placeholder="Ex: 10,5"
                     value={formData.percentualMulta}
                     onChange={(e) => handleInputChange("percentualMulta", e.target.value)}
                   />
@@ -791,9 +799,8 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   </Label>
                   <Input
                     id="percentualHonorarios"
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
+                    type="text"
+                    placeholder="Ex: 5,25"
                     value={formData.percentualHonorarios}
                     onChange={(e) => handleInputChange("percentualHonorarios", e.target.value)}
                   />
