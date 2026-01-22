@@ -19,22 +19,3 @@ export async function GET(request: NextRequest) {
     })
   }
 }
-        const [mes, ano] = mesAno.split("/")
-        const valorNumerico = Number.parseFloat(valor.replace(",", ".").replace("%", ""))
-
-        if (!isNaN(valorNumerico) && mes && ano) {
-          indices.push({
-            mes: Number.parseInt(mes),
-            ano: Number.parseInt(ano),
-            valor: valorNumerico,
-          })
-        }
-      }
-    })
-
-    return indices
-  } catch (error) {
-    console.error("Erro ao buscar dados do IGP-M:", error)
-    return []
-  }
-}
