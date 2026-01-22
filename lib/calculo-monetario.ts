@@ -99,6 +99,51 @@ function diasExatosEntre(inicio: Date, fim: Date): number {
   return Math.max(0, Math.round((fimUTC - inicioUTC) / msPorDia))
 }
 
+// Função para aplicar regra de ciclos de 12 parcelas
+// O valor das parcelas permanece fixo durante cada ciclo de 12 parcelas
+// e é reajustado exclusivamente pelo IGP-M/FGV ao final de cada período
+function aplicarCicloParcelasIGPM(
+  indices: IndiceData[],
+): IndiceData[] {
+  if (indices.length <= 12) {
+    return indices // Se houver 12 ou menos parcelas, retornar sem modificação
+  }
+
+  const resultado: IndiceData[] = []
+  let parcelaAtual = 0
+  let cicloAtual = 0
+  let fatorCicloIGPM = 1
+
+  indices.forEach((indice, i) => {
+    parcelaAtual = i + 1
+    const posicaoNoCiclo = ((parcelaAtual - 1) % 12) + 1
+
+    if (posicaoNoCiclo === 1 && parcelaAtual > 1) {
+      // Começou novo ciclo - reajustar com IGP-M
+      cicloAtual++
+      // O IGP-M do primeiro mês do novo ciclo será aplicado ao final do ciclo anterior
+    }
+
+    // Parcelas 2-12 do ciclo mantêm valor fixo (índice = 0)
+    // Apenas no final de cada ciclo (parcela 12 ou última) aplica-se o reajuste
+    if (posicaoNoCiclo === 12 || i === indices.length - 1) {
+      // Aplicar o índice (reajuste do ciclo)
+      resultado.push(indice)
+    } else if (posicaoNoCiclo > 1) {
+      // Parcelas 2 a 11: valor fixo (sem correção, índice = 0)
+      resultado.push({
+        ...indice,
+        valor: 0, // Sem variação nesta parcela
+      })
+    } else {
+      // Primeira parcela do ciclo
+      resultado.push(indice)
+    }
+  })
+
+  return resultado
+}
+
 function obterTaxaAnual(
   taxaInformadaPercent: number,
   periodicidade: string | undefined,
@@ -204,6 +249,10 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
     : null
   const parcelaInicio = parametros.parcelaInicioIndiceSecundario || 13
 
+  // REGRA OBRIGATÓRIA: Valor das parcelas permanece fixo durante cada ciclo de 12 parcelas
+  // e é reajustado exclusivamente pelo IGP-M/FGV somente ao final de cada período de 12 parcelas
+  const aplicarCiclosParcelasIGPM = true // Ativar regra de 12 parcelas
+
   memoriaCalculo.push(`=== CÁLCULO DE CORREÇÃO MONETÁRIA ===`)
   memoriaCalculo.push(
     `Valor original: R$ ${parametros.valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
@@ -275,7 +324,15 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   memoriaCalculo.push(`Período: ${periodo.meses} meses e ${periodo.dias} dias`)
 
   // Obter índices do período principal
-  const indicesDBPeriodo = await obterIndicesPeriodo(parametros.dataInicial, parametros.dataFinal, parametros.indice)
+  let indicesDBPeriodo = await obterIndicesPeriodo(parametros.dataInicial, parametros.dataFinal, parametros.indice)
+  
+  // APLICAR REGRA: Valor fixo durante ciclos de 12 parcelas (apenas para IGP-M)
+  if (aplicarCiclosParcelasIGPM && nomeIndice === "IGP-M" && !nomeIndiceSecundario) {
+    indicesDBPeriodo = aplicarCicloParcelasIGPM(indicesDBPeriodo)
+    memoriaCalculo.push(``)
+    memoriaCalculo.push(`REGRA APLICADA: Valor das parcelas permanece fixo durante cada ciclo de 12 parcelas,`)
+    memoriaCalculo.push(`reajustado exclusivamente pelo IGP-M/FGV ao final de cada período.`)
+  }
   
   // Obter índices do período secundário (se configurado)
   let indicesSecundario: IndiceData[] = []
