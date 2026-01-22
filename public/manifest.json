@@ -1,0 +1,27 @@
+{
+  "name": "Calculadora de Atualização Monetária - CGOF/SP",
+  "short_name": "Calculadora Monetária",
+  "description": "Sistema de cálculo de correção monetária, juros, multa e honorários",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

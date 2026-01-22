@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://monetary-update-calculator.vercel.app/sitemap.xml
