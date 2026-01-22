@@ -303,89 +303,20 @@ function aplicarReajusteIGPMACada12Meses(
     const indicePoupanca = indiceAtual
 
     // ┌─────────────────────────────────────────────────────────────────┐
-    // │ VERIFICAÇÃO: É mês múltiplo de 12 (aniversário)?              │
+    // │ APLICAR APENAS POUPANÇA MENSAL                                 │
+    // │                                                               │
+    // │ Valor_mês = Valor_anterior × (1 + p_m)                      │
+    // │                                                               │
+    // │ Onde: p_m = taxa mensal da poupança (decimal)               │
+    // │                                                               │
+    // │ Exemplo:                                                      │
+    // │ Valor_mês = 296.556,65 × (1 + 0,001159)                     │
+    // │ Valor_mês = 296.900,36                                       │
+    // │                                                               │
+    // │ NOTA: IGP-M será aplicado apenas no parcelamento,            │
+    // │ a cada 12 meses de parcelamento (não aqui)                   │
     // └─────────────────────────────────────────────────────────────────┘
-    // Verificar se é mês múltiplo de 12 (exatamente nos meses 12, 24, 36...)
-    if (contador_meses % 12 === 0) {
-      // ┌─────────────────────────────────────────────────────────────────┐
-      // │ REGRA 3 + REGRA 4: MÊS DE ANIVERSÁRIO (12, 24, 36...)         │
-      // │                                                               │
-      // │ ETAPA 1: Correção mensal pela poupança                       │
-      // │   Valor_corrigido = Valor_anterior × (1 + p_m)              │
-      // │                                                               │
-      // │ ETAPA 2: Reajuste anual pelo IGP-M acumulado                 │
-      // │   Valor_mês = Valor_corrigido × (1 + igpm_12)               │
-      // │                                                               │
-      // │ FÓRMULA CONSOLIDADA (Regra 4):                                │
-      // │   Valor_mês = Valor_anterior × (1 + p_m) × (1 + igpm_12)    │
-      // │                                                               │
-      // │ CRÍTICO: Multiplicação de FATORES (NUNCA soma de percentuais) │
-      // └─────────────────────────────────────────────────────────────────┘
-      
-      // Buscar os 12 meses DE IGP-M IMEDIATAMENTE ANTERIORES
-      const inicioIGPM = i - 11 // 12 meses antes (0-based)
-
-      // Coletar os índices de IGP-M deste ciclo
-      const igpmDoCiclo: IndiceData[] = []
-
-      for (let j = 0; j < 12; j++) {
-        const indiceDoMesAnterior = indicesEscolhidos[inicioIGPM + j]
-        if (indiceDoMesAnterior) {
-          // Buscar o IGP-M correspondente a este mês
-          const igpmCorrespondenteEncontrado = indicesIGPM.find(
-            (idx) => idx.mes === indiceDoMesAnterior.mes && idx.ano === indiceDoMesAnterior.ano
-          )
-          if (igpmCorrespondenteEncontrado) {
-            igpmDoCiclo.push(igpmCorrespondenteEncontrado)
-          }
-        }
-      }
-
-      // Calcular IGP-M acumulado apenas se temos 12 meses completos
-      if (igpmDoCiclo.length === 12) {
-        const igpmInfo = calcularIGPMAcumulado12Meses(igpmDoCiclo)
-        const igpmAcumulado = igpmInfo.valor
-
-        // FÓRMULA 3: Fator = (1 + Poupança) × (1 + IGP-M acumulado)
-        // Multiplicação de fatores (NUNCA soma de percentuais)
-        const fatorPoupanca = 1 + indicePoupanca.valor / 100
-        const fatorIGPM = 1 + igpmAcumulado / 100
-        const fatorTotal = fatorPoupanca * fatorIGPM
-
-        // Converter fator de volta para percentual
-        const percentualTotal = (fatorTotal - 1) * 100
-
-        resultado.push({
-          mes: indiceAtual.mes,
-          ano: indiceAtual.ano,
-          valor: percentualTotal,
-          isReajusteIGPM: true,
-          indiceOriginal: indicePoupanca.valor,
-          igpmReajuste: igpmAcumulado,
-        })
-      } else {
-        // Ciclo incompleto: aplicar apenas Poupança (sem IGP-M)
-        resultado.push(indicePoupanca)
-      }
-    } else {
-      // ┌─────────────────────────────────────────────────────────────────┐
-      // │ REGRA 2: MESES COMUNS (sem aniversário anual)                 │
-      // │ Meses: 1-11, 13-23, 25-35, etc.                              │
-      // │                                                               │
-      // │ Aplica-se somente a poupança do mês:                         │
-      // │ Valor_mês = Valor_anterior × (1 + p_m)                      │
-      // │                                                               │
-      // │ Onde: p_m = taxa mensal da poupança (decimal)               │
-      // │                                                               │
-      // │ Exemplo:                                                      │
-      // │ Valor_mês = 296.556,65 × (1 + 0,001159)                     │
-      // │ Valor_mês = 296.900,36                                       │
-      // │                                                               │
-      // │ IMPORTANTE: IGP-M NÃO entra mensalmente                       │
-      // │ Ele entra uma única vez por ciclo de 12 meses                │
-      // └─────────────────────────────────────────────────────────────────┘
-      resultado.push(indicePoupanca)
-    }
+    resultado.push(indicePoupanca)
   }
 
   return resultado
@@ -766,14 +697,8 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       
       if (temReajusteIGPM) {
         memoriaCalculo.push(``)
-        memoriaCalculo.push(`Com REAJUSTE IGP-M a cada 12 meses conforme determinação FGV`)
-        memoriaCalculo.push(`Fórmula do reajuste: IGP-M acumulado = (1 + m1) × (1 + m2) × ... × (1 + m12) − 1`)
-        memoriaCalculo.push(``)
-        memoriaCalculo.push(`OBSERVAÇÃO IMPORTANTE:`)
-        memoriaCalculo.push(`A Poupança recebe dois componentes a cada 12 meses:`)
-        memoriaCalculo.push(`1. O índice mensal da própria Poupança`)
-        memoriaCalculo.push(`2. O reajuste IGP-M acumulado dos 12 meses anteriores`)
-        memoriaCalculo.push(`Ambos são MULTIPLICADOS (acúmulo de fatores): Fator Total = (1 + Poupança) × (1 + IGP-M acumulado)`)
+        memoriaCalculo.push(`Aplicação de Poupança mensal`)
+        memoriaCalculo.push(`OBSERVAÇÃO: Reajuste IGP-M a cada 12 meses é aplicado APENAS no Parcelamento`)
         memoriaCalculo.push(``)
       }
       
@@ -805,14 +730,6 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
 
         let linha = `| ${mesAno} | ${taxa} | ${jurosFormatado} | ${taxaAcumFormatada} | ${valorTotalFormatado} |`
         
-        // Indicador de reajuste IGP-M: mostrar no mês 12, 24, 36... (fim do ciclo)
-        if (temReajusteIGPM && mesDosCiclo === 12 && indice.isReajusteIGPM) {
-          const indiceOriginal = indice.indiceOriginal ?? 0
-          const reajusteIGPM = indice.igpmReajuste ?? 0
-          const numeroCiclo = Math.floor(index / 12)
-          linha += ` ← **REAJUSTE ANUAL - CICLO ${numeroCiclo}** | Poupança: ${indiceOriginal.toFixed(4)}% + IGP-M acumulado: ${reajusteIGPM.toFixed(4)}% | Fator: 1.${(indiceOriginal / 100).toFixed(6)} × 1.${(reajusteIGPM / 100).toFixed(6)}`
-        }
-        
         memoriaCalculo.push(linha)
 
         valorAnterior = valorAtual
@@ -821,91 +738,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
 
       memoriaCalculo.push(``)
       
-      // Se houver reajuste IGP-M, mostrar detalhamento
-      if (temReajusteIGPM) {
-        memoriaCalculo.push(`=== DETALHAMENTO DO MODELO HÍBRIDO (Poupança + IGP-M Anual) ===`)
-        memoriaCalculo.push(``)
-        memoriaCalculo.push(`Este detalhamento mostra o cálculo dos ciclos de 12 meses com reajuste anual pelo IGP-M.`)
-        memoriaCalculo.push(``)
-        
-        let cicloAtual = 1
-        let mesDosCiclo = 0
-        let indicesCiclo: IndiceData[] = []
-        let igpmDoCiclo: IndiceData[] = []
-        
-        indicesDBPeriodo.forEach((indice, index) => {
-          mesDosCiclo = (index % 12) + 1
-          
-          if (mesDosCiclo === 1 && index > 0) {
-            // Fim do ciclo anterior - mostrar cálculo do reajuste
-            if (indicesCiclo.length === 12 && indice.isReajusteIGPM) {
-              memoriaCalculo.push(``)
-              memoriaCalculo.push(`**CICLO ${cicloAtual}** (Meses ${index - 11} a ${index}):`)
-              
-              // Mostrar período
-              const primeiroIndice = indicesCiclo[0]
-              const ultimoIndice = indicesCiclo[11]
-              const mesesNomes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
-              const mesInicio = `${mesesNomes[primeiroIndice.mes - 1]}/${primeiroIndice.ano}`
-              const mesFim = `${mesesNomes[ultimoIndice.mes - 1]}/${ultimoIndice.ano}`
-              
-              memoriaCalculo.push(`Período: ${mesInicio} a ${mesFim}`)
-              memoriaCalculo.push(``)
-              
-              // Mostrar índices mensais da Poupança
-              memoriaCalculo.push(`Índices mensais da Poupança:`)
-              let fatorPoupanca = 1
-              const valoresPoupanca: string[] = []
-              indicesCiclo.forEach((m, idx) => {
-                const fator = 1 + m.valor / 100
-                fatorPoupanca *= fator
-                const mesNome = mesesNomes[m.mes - 1]
-                valoresPoupanca.push(`${mesNome}: ${m.valor.toFixed(4)}%`)
-              })
-              memoriaCalculo.push(valoresPoupanca.join("  |  "))
-              
-              const poupancaAcumulada = (fatorPoupanca - 1) * 100
-              memoriaCalculo.push(`Fator acumulado Poupança: ${fatorPoupanca.toFixed(8)}`)
-              memoriaCalculo.push(`Percentual acumulado: ${poupancaAcumulada.toFixed(8)}%`)
-              memoriaCalculo.push(``)
-              
-              // Mostrar IGP-M do ciclo (referência)
-              if (indice.isReajusteIGPM && indice.igpmReajuste !== undefined) {
-                memoriaCalculo.push(`IGP-M acumulado do ciclo (${mesInicio} a ${mesFim}):`)
-                memoriaCalculo.push(`Fórmula: IGP-M = (1 + m1) × (1 + m2) × ... × (1 + m12) − 1`)
-                memoriaCalculo.push(`Resultado: ${indice.igpmReajuste.toFixed(8)}%`)
-                memoriaCalculo.push(``)
-                
-                // Mostrar fórmula final do ciclo
-                const fatorIGPM = 1 + (indice.igpmReajuste / 100)
-                const fatorPoupancaMes12 = 1 + (indice.indiceOriginal ?? 0) / 100
-                memoriaCalculo.push(`APLICAÇÃO NO MÊS 12 (${mesFim}):`)
-                memoriaCalculo.push(`Fator Poupança (mês 12): ${fatorPoupancaMes12.toFixed(8)}`)
-                memoriaCalculo.push(`Fator IGP-M acumulado: ${fatorIGPM.toFixed(8)}`)
-                memoriaCalculo.push(`Fator total: ${fatorPoupancaMes12.toFixed(4)} × ${fatorIGPM.toFixed(4)} = ${(fatorPoupancaMes12 * fatorIGPM).toFixed(8)}`)
-                memoriaCalculo.push(`Percentual total: ${((fatorPoupancaMes12 * fatorIGPM - 1) * 100).toFixed(8)}%`)
-              }
-            }
-            
-            indicesCiclo = [indice]
-            cicloAtual++
-          } else {
-            indicesCiclo.push(indice)
-          }
-        })
-        
-        // Último ciclo
-        if (indicesCiclo.length > 0 && indicesCiclo.length < 12) {
-          memoriaCalculo.push(``)
-          memoriaCalculo.push(`**CICLO ${cicloAtual}** (incompleto):`)
-          memoriaCalculo.push(`Período: ${indicesCiclo.length} meses (últimos meses do período)`)
-          memoriaCalculo.push(`Observação: Ciclo incompleto não recebe reajuste IGP-M`)
-        }
-        
-        memoriaCalculo.push(``)
-      }
-      
-      memoriaCalculo.push(`Total de aniversários aplicados: ${indicesDBPeriodo.length}`)
+      memoriaCalculo.push(`Total de meses aplicados: ${indicesDBPeriodo.length}`)
       memoriaCalculo.push(`Taxa de juros total acumulada: ${((fatorCorrecao - 1) * 100).toFixed(6)}%`)
       memoriaCalculo.push(
         `Total de juros ganhos: R$ ${(valorAnterior - parametros.valorOriginal).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
@@ -1217,8 +1050,52 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
 
   if (parametros.numeroParcelas && parametros.numeroParcelas > 0) {
     const numeroParcelas = Math.floor(parametros.numeroParcelas)
-    const valorParcela = valorTotal / numeroParcelas
-    const valorTotalParcelado = valorTotal // O total permanece o mesmo, apenas dividido
+    
+    // Calcular valor total com IGP-M a cada 12 meses de parcelamento
+    let valorParcelamentoComIGPM = valorOriginal
+    let mesesParcelamento = 0
+    let contadorIGPM = 0
+    
+    // Simular o crescimento do parcelamento aplicando Poupança + IGP-M a cada 12 meses
+    for (let parcela = 1; parcela <= numeroParcelas; parcela++) {
+      mesesParcelamento++
+      const indiceAtualPoupanca = indicesDBPeriodo[mesesParcelamento - 1]
+      
+      if (indiceAtualPoupanca) {
+        const fatorPoupanca = 1 + indiceAtualPoupanca.valor / 100
+        valorParcelamentoComIGPM *= fatorPoupanca
+        
+        // A cada 12 meses de parcelamento, aplicar IGP-M acumulado
+        if (mesesParcelamento % 12 === 0 && mesesParcelamento > 0) {
+          // Buscar os 12 meses de IGP-M correspondentes
+          const inicioIGPMCiclo = mesesParcelamento - 11
+          const igpmDoCiclo: IndiceData[] = []
+          
+          for (let j = 0; j < 12; j++) {
+            const indiceIGPMPeriodo = indicesDBPeriodo[inicioIGPMCiclo + j - 1]
+            if (indiceIGPMPeriodo) {
+              const igpmCorrespondenteEncontrado = indicesIGPM.find(
+                (idx) => idx.mes === indiceIGPMPeriodo.mes && idx.ano === indiceIGPMPeriodo.ano
+              )
+              if (igpmCorrespondenteEncontrado) {
+                igpmDoCiclo.push(igpmCorrespondenteEncontrado)
+              }
+            }
+          }
+          
+          // Se houver 12 meses de IGP-M, aplicar
+          if (igpmDoCiclo.length === 12) {
+            const igpmInfo = calcularIGPMAcumulado12Meses(igpmDoCiclo)
+            const fatorIGPM = 1 + igpmInfo.valor / 100
+            valorParcelamentoComIGPM *= fatorIGPM
+            contadorIGPM++
+          }
+        }
+      }
+    }
+    
+    const valorParcela = valorParcelamentoComIGPM / numeroParcelas
+    const valorTotalParcelado = valorParcelamentoComIGPM
 
     parcelamento = {
       numeroParcelas,
@@ -1229,9 +1106,14 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
     memoriaCalculo.push(``)
     memoriaCalculo.push(`=== PARCELAMENTO ===`)
     memoriaCalculo.push(``)
-    memoriaCalculo.push(`Valor total a parcelar: R$ ${valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+    memoriaCalculo.push(`Valor original a parcelar: R$ ${valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
     memoriaCalculo.push(`Número de parcelas: ${numeroParcelas}`)
+    memoriaCalculo.push(``)
+    memoriaCalculo.push(`APLICAÇÃO: Poupança mensal + IGP-M a cada 12 meses de parcelamento`)
+    memoriaCalculo.push(``)
+    memoriaCalculo.push(`Valor total após correção: R$ ${valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
     memoriaCalculo.push(`Valor de cada parcela: R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+    memoriaCalculo.push(`Ciclos de IGP-M aplicados: ${contadorIGPM}`)
     memoriaCalculo.push(``)
     memoriaCalculo.push(`Cronograma de Pagamento:`)
     memoriaCalculo.push(``)
@@ -1244,7 +1126,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
     }
 
     memoriaCalculo.push(``)
-    memoriaCalculo.push(`Total: R$ ${valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+    memoriaCalculo.push(`Total: R$ ${valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
   }
 
   return {
