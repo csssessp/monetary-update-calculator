@@ -222,17 +222,47 @@ function aplicarCicloParcelasIGPM(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FÓRMULA 3: Fórmula consolidada do mês com aniversário de 12 meses
+// REGRAS DE CÁLCULO MENSAIS - 4 FÓRMULAS ESSENCIAIS
 // ═══════════════════════════════════════════════════════════════════════════════
-// Quando coincidem poupança + reajuste anual (a cada 12 meses):
+//
+// REGRA 2: Cálculo correto mês a mês (REGRA GERAL)
+// ─────────────────────────────────────────────────────────────────────────────
+// 2.1. MESES COMUNS (sem aniversário anual):
+//      Aplica-se somente a poupança do mês
+//      Valor_mês = Valor_anterior × (1 + p_m)
+//
+//      Onde: p_m = taxa mensal da poupança (decimal)
+//      
+//      Exemplo:
+//      Valor_mês = 296.556,65 × (1 + 0,001159)
+//      Valor_mês = 296.900,36
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// REGRA 3: Cálculo correto no mês de aniversário de 12 meses
+// ─────────────────────────────────────────────────────────────────────────────
+// No mês em que se completam 12 meses, a aplicação é em duas ETAPAS:
+//
+// Etapa 1 — Correção mensal pela poupança:
+//   Valor_corrigido = Valor_anterior × (1 + p_m)
+//
+// Etapa 2 — Reajuste anual pelo IGP-M acumulado:
+//   Valor_mês = Valor_corrigido × (1 + igpm_12)
+//
+// Onde: igpm_12 = IGP-M acumulado dos 12 meses anteriores (decimal)
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// REGRA 4: Fórmula consolidada do mês com reajuste anual
+// ─────────────────────────────────────────────────────────────────────────────
+// Para uso direto em sistema ou planilha:
 //
 // Valor_mês = Valor_anterior × (1 + p_m) × (1 + igpm_12)
 //
-// Onde:
-//   p_m = taxa mensal da poupança do mês (em forma decimal)
-//   igpm_12 = IGP-M acumulado dos 12 meses anteriores (em forma decimal)
+// CRÍTICO: O IGP-M entra uma única vez
+//   ✗ Nunca deve aparecer como "taxa do mês"
+//   ✗ Nunca deve gerar "juros do mês"
+//   ✗ Multiplicação de FATORES, não soma de percentuais
+//   ✗ Aplicado apenas nos meses: 12, 24, 36, 48...
 //
-// OBSERVAÇÃO CRÍTICA: Multiplicação de FATORES, não soma de percentuais
 // ═══════════════════════════════════════════════════════════════════════════════
 function aplicarReajusteIGPMACada12Meses(
   indicesEscolhidos: IndiceData[],
@@ -265,13 +295,25 @@ function aplicarReajusteIGPMACada12Meses(
     // Sempre aplicar Poupança mensal
     const indicePoupanca = indiceAtual
 
+    // ┌─────────────────────────────────────────────────────────────────┐
+    // │ VERIFICAÇÃO: É mês múltiplo de 12 (aniversário)?              │
+    // └─────────────────────────────────────────────────────────────────┘
     // Verificar se é mês múltiplo de 12 (exatamente nos meses 12, 24, 36...)
     if (contador_meses % 12 === 0) {
-      // ─────────────────────────────────────────────────────────────────
-      // FÓRMULA 3: Aplicar FÓRMULA 1 (Poupança) + FÓRMULA 2 (IGP-M acumulado)
-      // ─────────────────────────────────────────────────────────────────
-      // Valor_mês = Valor_anterior × (1 + p_m) × (1 + igpm_12)
-      // ─────────────────────────────────────────────────────────────────
+      // ┌─────────────────────────────────────────────────────────────────┐
+      // │ REGRA 3 + REGRA 4: MÊS DE ANIVERSÁRIO (12, 24, 36...)         │
+      // │                                                               │
+      // │ ETAPA 1: Correção mensal pela poupança                       │
+      // │   Valor_corrigido = Valor_anterior × (1 + p_m)              │
+      // │                                                               │
+      // │ ETAPA 2: Reajuste anual pelo IGP-M acumulado                 │
+      // │   Valor_mês = Valor_corrigido × (1 + igpm_12)               │
+      // │                                                               │
+      // │ FÓRMULA CONSOLIDADA (Regra 4):                                │
+      // │   Valor_mês = Valor_anterior × (1 + p_m) × (1 + igpm_12)    │
+      // │                                                               │
+      // │ CRÍTICO: Multiplicação de FATORES (NUNCA soma de percentuais) │
+      // └─────────────────────────────────────────────────────────────────┘
       
       // Buscar os 12 meses DE IGP-M IMEDIATAMENTE ANTERIORES
       const inicioIGPM = i - 11 // 12 meses antes (0-based)
@@ -319,15 +361,22 @@ function aplicarReajusteIGPMACada12Meses(
         resultado.push(indicePoupanca)
       }
     } else {
-      // ─────────────────────────────────────────────────────────────────
-      // FÓRMULA 1: Meses 1-11, 13-23, 25-35, etc. (não são aniversários)
-      // ─────────────────────────────────────────────────────────────────
-      // Aplicar apenas Poupança mensal
-      // Valor_mês = Valor_anterior × (1 + p_m)
-      // 
-      // IMPORTANTE: IGP-M NÃO entra mensalmente
-      // Ele entra uma única vez por ciclo de 12 meses
-      // ─────────────────────────────────────────────────────────────────
+      // ┌─────────────────────────────────────────────────────────────────┐
+      // │ REGRA 2: MESES COMUNS (sem aniversário anual)                 │
+      // │ Meses: 1-11, 13-23, 25-35, etc.                              │
+      // │                                                               │
+      // │ Aplica-se somente a poupança do mês:                         │
+      // │ Valor_mês = Valor_anterior × (1 + p_m)                      │
+      // │                                                               │
+      // │ Onde: p_m = taxa mensal da poupança (decimal)               │
+      // │                                                               │
+      // │ Exemplo:                                                      │
+      // │ Valor_mês = 296.556,65 × (1 + 0,001159)                     │
+      // │ Valor_mês = 296.900,36                                       │
+      // │                                                               │
+      // │ IMPORTANTE: IGP-M NÃO entra mensalmente                       │
+      // │ Ele entra uma única vez por ciclo de 12 meses                │
+      // └─────────────────────────────────────────────────────────────────┘
       resultado.push(indicePoupanca)
     }
   }
