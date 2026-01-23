@@ -138,7 +138,36 @@ function diasExatosEntre(inicio: Date, fim: Date): number {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// FÓRMULA 2: Reajuste anual pelo IGP-M (a cada 12 meses completos)
+// FÓRMULA 2: Reajuste pelo ÚLTIMO IGP-M disponível (mais recente)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Reajuste = Último índice IGP-M disponível (ex: Dezembro/2025 = -0.01%)
+// 
+// Onde:
+//   Usa o valor do mês mais recente disponível como reajuste
+//   Resultado em percentual
+//
+// Aplicação: Uma única vez por ciclo de 12 meses, nunca distribuído mensalmente
+// ═══════════════════════════════════════════════════════════════════════════════
+function obterUltimoIndiceIGPM(indices: IndiceData[]): { valor: number; detalhes: IndiceData[] } {
+  if (indices.length === 0) return { valor: 0, detalhes: [] }
+  
+  // Ordenar por ano e depois por mês para encontrar o mais recente
+  const indicesOrdenados = [...indices].sort((a, b) => {
+    if (a.ano !== b.ano) return a.ano - b.ano
+    return a.mes - b.mes
+  })
+  
+  // Pegar o último índice (mais recente)
+  const ultimoIndice = indicesOrdenados[indicesOrdenados.length - 1]
+  
+  return {
+    valor: ultimoIndice.valor, // Usar o valor diretamente
+    detalhes: [ultimoIndice]
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FÓRMULA 2 (DESCONTINUADA): Reajuste anual pelo IGP-M acumulado (a cada 12 meses completos)
 // ═══════════════════════════════════════════════════════════════════════════════
 // IGP-M acumulado = (1 + m1) × (1 + m2) × ... × (1 + m12) − 1
 // 
@@ -1008,12 +1037,14 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
         const mesesParaUsar = indicesIGPMCiclo.slice(0, 12)
         
         if (mesesParaUsar.length > 0) {
-          // Calcular IGP-M acumulado dos meses disponíveis
-          const igpmInfo = calcularIGPMAcumulado12Meses(mesesParaUsar)
+          // Pegar apenas o ÚLTIMO índice IGP-M disponível (mais recente)
+          const igpmInfo = obterUltimoIndiceIGPM(mesesParaUsar)
           const igpmAcumulado = igpmInfo.valor
         const fatorIGPM = 1 + igpmAcumulado / 100
         
-        memoriaCalculo.push(`IGP-M acumulado (${mesesParaUsar.length} mês(es)): ${igpmAcumulado.toFixed(4)}%`)
+        const ultimoIndiceData = igpmInfo.detalhes[0]
+        const nomeMeses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+        memoriaCalculo.push(`IGP-M - Último índice disponível: ${nomeMeses[ultimoIndiceData.mes - 1]}/${ultimoIndiceData.ano}: ${igpmAcumulado.toFixed(4)}%`)
         memoriaCalculo.push(``)
         
         memoriaCalculo.push(`Reajuste a ser aplicado: ${igpmAcumulado.toFixed(4)}%`)
@@ -1192,12 +1223,14 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
         const mesesParaUsar = indicesIGPMCiclo.slice(0, 12)
         
         if (mesesParaUsar.length > 0) {
-          // Calcular IGP-M acumulado dos meses disponíveis
-          const igpmInfo = calcularIGPMAcumulado12Meses(mesesParaUsar)
+          // Pegar apenas o ÚLTIMO índice IGP-M disponível (mais recente)
+          const igpmInfo = obterUltimoIndiceIGPM(mesesParaUsar)
           const igpmAcumulado = igpmInfo.valor
           const fatorIGPM = 1 + igpmAcumulado / 100
           
-          memoriaCalculo.push(`IGP-M acumulado (${mesesParaUsar.length} mês(es)): ${igpmAcumulado.toFixed(4)}%`)
+          const ultimoIndiceData = igpmInfo.detalhes[0]
+          const nomeMeses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+          memoriaCalculo.push(`IGP-M - Último índice disponível: ${nomeMeses[ultimoIndiceData.mes - 1]}/${ultimoIndiceData.ano}: ${igpmAcumulado.toFixed(4)}%`)
           memoriaCalculo.push(``)
           
           memoriaCalculo.push(`Reajuste a ser aplicado: ${igpmAcumulado.toFixed(4)}%`)
