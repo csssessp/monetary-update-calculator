@@ -136,6 +136,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
   }
 
   const executarCalculo = async () => {
+    console.log("[CALCULAR] Iniciando cálculo...")
     const novosErros: string[] = []
     const valorNumerico = parseBrazilianNumber(formData.valor)
     if (!formData.valor || valorNumerico <= 0) novosErros.push("Valor deve ser maior que zero")
@@ -146,6 +147,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
     if (!formData.indice) novosErros.push("Índice deve ser selecionado")
 
     if (novosErros.length > 0) {
+      console.log("[CALCULAR] Erros de validação:", novosErros)
       setErros(novosErros)
       setResultado(null)
       return
@@ -203,11 +205,14 @@ export default function CalculadoraAtualizacaoMonetaria() {
     }
 
     try {
+      console.log("[CALCULAR] Parâmetros:", parametros)
       const resultadoCalculo = await calcularCorrecaoMonetaria(parametros)
+      console.log("[CALCULAR] Resultado:", resultadoCalculo)
       setResultado(resultadoCalculo)
       setErros(errosData)
       setMensagemAtualizacao("")
     } catch (error) {
+      console.error("[CALCULAR] Erro:", error)
       setErros([`Erro no cálculo: ${error instanceof Error ? error.message : "Erro desconhecido"}`])
       setResultado(null)
       setMensagemAtualizacao("")
