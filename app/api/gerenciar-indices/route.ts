@@ -2,57 +2,110 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    // Retornar índices atualizados dos sites oficiais via APIs
+    // Buscar dados dos sites oficiais
     const responses = await Promise.allSettled([
-      // Poupança do Banco Central
-      fetch("https://api.bcb.gov.br/dados/serie/bcdata.sgs.195/dados?formato=json").then((r) => r.json()),
-      // IGP-M do IPEA
-      fetch("https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados?formato=json").then((r) => r.json()),
-      // IPCA do IBGE
-      fetch("https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json").then((r) => r.json()),
-      // INPC do IBGE
-      fetch("https://api.bcb.gov.br/dados/serie/bcdata.sgs.188/dados?formato=json").then((r) => r.json()),
-      // SELIC
-      fetch("https://api.bcb.gov.br/dados/serie/bcdata.sgs.432/dados?formato=json").then((r) => r.json()),
-      // CDI
-      fetch("https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados?formato=json").then((r) => r.json()),
+      // Poupança - https://www.debit.com.br/tabelas/poupanca
+      fetch("https://www.debit.com.br/tabelas/poupanca", {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Bot/1.0)",
+        },
+      }),
+      // IGP-M - https://legacy.debit.com.br/tabelas/tabela-completa-pdf.php?indice=igpm
+      fetch("https://legacy.debit.com.br/tabelas/tabela-completa-pdf.php?indice=igpm", {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Bot/1.0)",
+        },
+      }),
     ])
 
     const indices: Record<string, any[]> = {
       Poupança: [],
       "IGP-M": [],
-      IPCA: [],
-      INPC: [],
-      SELIC: [],
-      CDI: [],
     }
 
-    const nomes = ["Poupança", "IGP-M", "IPCA", "INPC", "SELIC", "CDI"]
-
-    responses.forEach((response, index) => {
-      if (response.status === "fulfilled" && Array.isArray(response.value)) {
-        indices[nomes[index]] = response.value
-          .map((item: any) => {
-            const dataParts = item.data.split("/")
-            if (dataParts.length === 3) {
-              return {
-                mes: parseInt(dataParts[1]),
-                ano: parseInt(dataParts[2]),
-                valor: parseFloat(item.valor),
-                fonte: "BCB - API",
-              }
-            }
-            return null
-          })
-          .filter((item: any) => item !== null)
+    // Tentar parsear resposta da Poupança
+    if (responses[0].status === "fulfilled") {
+      try {
+        const html = await responses[0].value.text()
+        // Parse HTML para extrair dados da Poupança
+        // Padrão: procurar por tabelas com data e valor
+        const poupancaData = parsePoUpancaHTML(html)
+        indices["Poupança"] = poupancaData
+      } catch (error) {
+        console.error("Erro ao parsear Poupança:", error)
       }
-    })
+    }
+
+    // Tentar parsear resposta do IGP-M
+    if (responses[1].status === "fulfilled") {
+      try {
+        const html = await responses[1].value.text()
+        // Parse HTML para extrair dados do IGP-M
+        const igpmData = parseIGPMHTML(html)
+        indices["IGP-M"] = igpmData
+      } catch (error) {
+        console.error("Erro ao parsear IGP-M:", error)
+      }
+    }
 
     return NextResponse.json(indices)
   } catch (error) {
     console.error("Erro ao buscar índices:", error)
     return NextResponse.json({ error: "Erro ao buscar índices" }, { status: 500 })
   }
+}
+
+// Parser para HTML da Poupança
+function parsePoUpancaHTML(html: string): any[] {
+  const indices: any[] = []
+
+  // Procurar por padrões de data/valor na tabela
+  // Exemplo: <td>01/2024</td><td>0,5342%</td>
+  const regex = /(\d{1,2})\/(\d{4})\D+?([\d,]+)%/g
+  let match
+
+  while ((match = regex.exec(html)) !== null) {
+    const mes = parseInt(match[1])
+    const ano = parseInt(match[2])
+    const valor = parseFloat(match[3].replace(",", "."))
+
+    if (mes >= 1 && mes <= 12 && ano >= 1986 && ano <= new Date().getFullYear() + 1) {
+      indices.push({
+        mes,
+        ano,
+        valor,
+        fonte: "debit.com.br",
+      })
+    }
+  }
+
+  return indices.sort((a, b) => (a.ano !== b.ano ? a.ano - b.ano : a.mes - b.mes))
+}
+
+// Parser para HTML do IGP-M
+function parseIGPMHTML(html: string): any[] {
+  const indices: any[] = []
+
+  // Procurar por padrões de data/valor na tabela do IGP-M
+  const regex = /(\d{1,2})\/(\d{4})\D+?([-\d,]+)%/g
+  let match
+
+  while ((match = regex.exec(html)) !== null) {
+    const mes = parseInt(match[1])
+    const ano = parseInt(match[2])
+    const valor = parseFloat(match[3].replace(",", "."))
+
+    if (mes >= 1 && mes <= 12 && ano >= 1989 && ano <= new Date().getFullYear() + 1) {
+      indices.push({
+        mes,
+        ano,
+        valor,
+        fonte: "legacy.debit.com.br",
+      })
+    }
+  }
+
+  return indices.sort((a, b) => (a.ano !== b.ano ? a.ano - b.ano : a.mes - b.mes))
 }
 
 export async function POST(request: NextRequest) {
@@ -63,6 +116,11 @@ export async function POST(request: NextRequest) {
     // Validar dados
     if (!indice || !mes || !ano || valor === undefined) {
       return NextResponse.json({ error: "Dados incompletos" }, { status: 400 })
+    }
+
+    // Apenas Poupança e IGP-M são permitidos
+    if (indice !== "Poupança" && indice !== "IGP-M") {
+      return NextResponse.json({ error: "Índice não permitido" }, { status: 400 })
     }
 
     // Aqui você poderia salvar em um banco de dados

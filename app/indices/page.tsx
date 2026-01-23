@@ -34,8 +34,8 @@ const meses = [
 ]
 const anos = Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i).reverse()
 
-// Lista de nomes de índices padrão para o Select
-const nomesIndicesPadrao = ["IGP-M", "IPCA", "INPC", "Poupança", "SELIC", "CDI"]
+// Lista de nomes de índices padrão para o Select - apenas Poupança e IGP-M
+const nomesIndicesPadrao = ["IGP-M", "Poupança"]
 
 export default function IndicesPage() {
   const [indices, setIndices] = useState<Indice[]>([])

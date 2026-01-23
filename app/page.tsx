@@ -80,11 +80,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
 
   const indicesDisponiveis = [
     `IGP-M (FGV) ...... (jun/1989 a ${dataAtualFormatada})`,
-    `IPCA (IBGE) ...... (jan/1980 a ${dataAtualFormatada})`,
-    `INPC (IBGE) ...... (jan/1980 a ${dataAtualFormatada})`,
     `Poupança ...... (mai/2012 a ${dataAtualFormatada})`,
-    `SELIC ...... (jul/1996 a ${dataAtualFormatada})`,
-    `CDI ...... (jan/1986 a ${dataAtualFormatada})`,
   ]
 
   const meses = [
