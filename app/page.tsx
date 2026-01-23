@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Calculator, Database, AlertTriangle, Download, FileText } from "lucide-react"
+import { Calculator, Database, AlertTriangle, Download, FileText, Clock } from "lucide-react"
 import {
   calcularCorrecaoMonetaria,
   validarDatas,
@@ -68,6 +68,9 @@ export default function CalculadoraAtualizacaoMonetaria() {
   const [erros, setErros] = useState<string[]>([])
   const [atualizandoIndices, setAtualizandoIndices] = useState(false)
   const [mensagemAtualizacao, setMensagemAtualizacao] = useState<string>("")
+  const [calculando, setCalculando] = useState(false)
+  const [progresso, setProgresso] = useState(0)
+  const [tempoDecorrido, setTempoDecorrido] = useState(0)
 
   const obterDataAtualFormatada = () => {
     const agora = new Date()
@@ -137,6 +140,19 @@ export default function CalculadoraAtualizacaoMonetaria() {
 
   const executarCalculo = async () => {
     console.log("[CALCULAR] Iniciando cálculo...")
+    setCalculando(true)
+    setProgresso(0)
+    setTempoDecorrido(0)
+    
+    // Simular progresso enquanto calcula
+    const intervaloProgresso = setInterval(() => {
+      setProgresso((prev) => {
+        if (prev < 90) return prev + Math.random() * 30
+        return prev
+      })
+      setTempoDecorrido((prev) => prev + 1)
+    }, 300)
+    
     const novosErros: string[] = []
     const valorNumerico = parseBrazilianNumber(formData.valor)
     if (!formData.valor || valorNumerico <= 0) novosErros.push("Valor deve ser maior que zero")
@@ -208,6 +224,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
       console.log("[CALCULAR] Parâmetros:", parametros)
       const resultadoCalculo = await calcularCorrecaoMonetaria(parametros)
       console.log("[CALCULAR] Resultado:", resultadoCalculo)
+      setProgresso(100)
       setResultado(resultadoCalculo)
       setErros(errosData)
       setMensagemAtualizacao("")
@@ -216,6 +233,10 @@ export default function CalculadoraAtualizacaoMonetaria() {
       setErros([`Erro no cálculo: ${error instanceof Error ? error.message : "Erro desconhecido"}`])
       setResultado(null)
       setMensagemAtualizacao("")
+    } finally {
+      clearInterval(intervaloProgresso)
+      setCalculando(false)
+      setTimeout(() => setProgresso(0), 1000)
     }
   }
 
@@ -482,6 +503,24 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
 
         <Card className="mb-6">
           <CardContent className="p-6">
+            {calculando && (
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <Clock className="h-5 w-5 text-blue-600 animate-spin" />
+                  <span className="text-blue-700 font-semibold">Processando cálculo...</span>
+                  <span className="text-blue-600 text-sm ml-auto">{tempoDecorrido}s</span>
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-blue-600 h-full transition-all duration-300 ease-out rounded-full"
+                    style={{ width: `${Math.min(progresso, 100)}%` }}
+                  ></div>
+                </div>
+                <div className="text-center text-blue-600 text-sm mt-2 font-medium">
+                  {Math.min(Math.round(progresso), 100)}%
+                </div>
+              </div>
+            )}
             <Alert className="mb-6 border-red-200 bg-red-50">
               <AlertTriangle className="h-4 w-4 text-red-600" />
               <AlertDescription className="text-red-700 font-medium">
@@ -795,9 +834,10 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                 onClick={executarCalculo} 
                 className="w-full sm:w-auto" 
                 size="lg"
+                disabled={calculando}
               >
                 <Calculator className="mr-2 h-4 w-4" />
-                Executar o Cálculo
+                {calculando ? "Calculando..." : "Executar o Cálculo"}
               </Button>
               <Button
                 onClick={limparFormulario}
