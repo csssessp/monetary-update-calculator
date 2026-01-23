@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Calculator, Database, AlertTriangle, Download } from "lucide-react"
+import { Calculator, Database, AlertTriangle, Download, FileText } from "lucide-react"
 import {
   calcularCorrecaoMonetaria,
   validarDatas,
@@ -1145,11 +1145,11 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                           Baixar XLSX
                         </Button>
                         <Button onClick={gerarPDF} variant="outline" size="sm">
-                          <FileText className="mr-2 h-4 w-4" />
+                          <Download className="mr-2 h-4 w-4" />
                           Gerar PDF
                         </Button>
                         <Button onClick={imprimir} variant="outline" size="sm">
-                          <FileText className="mr-2 h-4 w-4" />
+                          <Download className="mr-2 h-4 w-4" />
                           Imprimir
                         </Button>
                       </div>
