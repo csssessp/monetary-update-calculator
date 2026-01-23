@@ -534,38 +534,22 @@ export async function obterIndicesPeriodo(
   const indicesPeriodo: IndiceData[] = []
   const nomeCurtoIndice = getIndiceNome(nomeIndice)
 
-  if (nomeCurtoIndice === "Poupança") {
-    let dataAtual = new Date(dataInicial.ano, dataInicial.mes - 1, dataInicial.dia)
-    const dataFim = new Date(dataFinal.ano, dataFinal.mes - 1, dataFinal.dia)
+  // Apenas suportar IGP-M (Poupança foi removida devido a CORS bloqueado)
+  // IMPORTANTE: Para período de 12 meses, sempre começar do mês inicial (sem incremento)
+  // pois o período já foi calculado para incluir exatamente 12 meses
+  let mesAtual = dataInicial.mes
+  let anoAtual = dataInicial.ano
 
-    while (dataAtual < dataFim) {
-      const proximoAniversario = new Date(dataAtual)
-      proximoAniversario.setMonth(proximoAniversario.getMonth() + 1)
-
-      if (proximoAniversario <= dataFim) {
-        const mesIndice = proximoAniversario.getMonth() + 1
-        const anoIndice = proximoAniversario.getFullYear()
-        const indiceDoMes = indices.find((i) => i.mes === mesIndice && i.ano === anoIndice)
-        if (indiceDoMes) indicesPeriodo.push(indiceDoMes)
-      }
-      dataAtual = proximoAniversario
-    }
-  } else {
-    let mesAtual = dataInicial.dia === 1 ? dataInicial.mes : dataInicial.mes + 1
-    let anoAtual = dataInicial.ano
+  while (
+    anoAtual < dataFinal.ano ||
+    (anoAtual === dataFinal.ano && mesAtual <= dataFinal.mes)
+  ) {
+    const indiceDoMes = indices.find((i) => i.mes === mesAtual && i.ano === anoAtual)
+    if (indiceDoMes) indicesPeriodo.push(indiceDoMes)
+    mesAtual++
     if (mesAtual > 12) {
       mesAtual = 1
       anoAtual++
-    }
-
-    while (anoAtual < dataFinal.ano || (anoAtual === dataFinal.ano && mesAtual <= dataFinal.mes)) {
-      const indiceDoMes = indices.find((i) => i.mes === mesAtual && i.ano === anoAtual)
-      if (indiceDoMes) indicesPeriodo.push(indiceDoMes)
-      mesAtual++
-      if (mesAtual > 12) {
-        mesAtual = 1
-        anoAtual++
-      }
     }
   }
 
