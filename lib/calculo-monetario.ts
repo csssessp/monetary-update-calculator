@@ -1061,16 +1061,37 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(`Valor original: R$ ${parametros.valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
       memoriaCalculo.push(`Valor após todos os reajustes IGP-M: R$ ${valorParcelamentoComIGPM.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
       memoriaCalculo.push(`Número de parcelas: ${numeroParcelas}`)
-      memoriaCalculo.push(`Valor de cada parcela: R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
-      memoriaCalculo.push(`Valor total parcelado: R$ ${valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Cronograma de Pagamento:`)
       memoriaCalculo.push(``)
-      memoriaCalculo.push(`| Parcela | Valor (R$) |`)
-      memoriaCalculo.push(`|---------|------------|`)
+      memoriaCalculo.push(`| Parcela | Ciclo | Valor (R$) |`)
+      memoriaCalculo.push(`|---------|-------|------------|`)
+      
+      // Calcular valor de parcela base (valor original dividido por número de parcelas)
+      const valorParcelaBase = parametros.valorOriginal / numeroParcelas
+      
+      // Rastrear reajustes acumulados para cada parcela
+      let reajusteAcumuladoAtual = 1.0
+      let parcelasProcessadas = 0
+      
       for (let i = 1; i <= numeroParcelas; i++) {
-        memoriaCalculo.push(`| ${i} | ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} |`)
+        // Determinar qual ciclo esta parcela pertence
+        const numeroCiclo = Math.ceil(i / 12)
+        
+        // Se mudou de ciclo, aplicar o reajuste do ciclo anterior
+        if (i > 1 && (i - 1) % 12 === 0 && cicloAnteriorDetalhes.length > 0) {
+          // Aplicar reajuste do ciclo anterior para as próximas parcelas
+          const cicloAnterior = cicloAnteriorDetalhes[cicloAnteriorDetalhes.length - 1]
+          const fatorReajuste = 1 + cicloAnterior.igpmAcumulado / 100
+          reajusteAcumuladoAtual *= fatorReajuste
+        }
+        
+        // Calcular valor da parcela com reajustes acumulados
+        const valorParcelaComReajuste = valorParcelaBase * reajusteAcumuladoAtual
+        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} |`)
+        parcelasProcessadas++
       }
+      
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Total: R$ ${valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
       memoriaCalculo.push(``)
@@ -1220,16 +1241,35 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(`Valor original: R$ ${parametros.valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
       memoriaCalculo.push(`Valor após todos os reajustes IGP-M: R$ ${valorParcelamentoPoupanca.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
       memoriaCalculo.push(`Número de parcelas: ${numeroParcelas}`)
-      memoriaCalculo.push(`Valor de cada parcela: R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
-      memoriaCalculo.push(`Valor total parcelado: R$ ${valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Cronograma de Pagamento:`)
       memoriaCalculo.push(``)
-      memoriaCalculo.push(`| Parcela | Valor (R$) |`)
-      memoriaCalculo.push(`|---------|------------|`)
+      memoriaCalculo.push(`| Parcela | Ciclo | Valor (R$) |`)
+      memoriaCalculo.push(`|---------|-------|------------|`)
+      
+      // Calcular valor de parcela base (valor original dividido por número de parcelas)
+      const valorParcelaBase = parametros.valorOriginal / numeroParcelas
+      
+      // Rastrear reajustes acumulados para cada parcela
+      let reajusteAcumuladoAtualPoupanca = 1.0
+      
       for (let i = 1; i <= numeroParcelas; i++) {
-        memoriaCalculo.push(`| ${i} | ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} |`)
+        // Determinar qual ciclo esta parcela pertence
+        const numeroCiclo = Math.ceil(i / 12)
+        
+        // Se mudou de ciclo, aplicar o reajuste do ciclo anterior
+        if (i > 1 && (i - 1) % 12 === 0 && cicloAnteriorDetalhesPoupanca.length > 0) {
+          // Aplicar reajuste do ciclo anterior para as próximas parcelas
+          const cicloAnterior = cicloAnteriorDetalhesPoupanca[cicloAnteriorDetalhesPoupanca.length - 1]
+          const fatorReajuste = 1 + cicloAnterior.igpmAcumulado / 100
+          reajusteAcumuladoAtualPoupanca *= fatorReajuste
+        }
+        
+        // Calcular valor da parcela com reajustes acumulados
+        const valorParcelaComReajuste = valorParcelaBase * reajusteAcumuladoAtualPoupanca
+        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} |`)
       }
+      
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Total: R$ ${valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
       memoriaCalculo.push(``)
