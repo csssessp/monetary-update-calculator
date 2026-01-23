@@ -182,20 +182,23 @@ function calcularIGPMAcumulado12Meses(indices: IndiceData[]): { valor: number; d
 // FUNÇÃO: Calcular ciclos de parcelamento com base na data ATUAL
 // ═══════════════════════════════════════════════════════════════════════════════
 // 
-// IMPORTANTE: IGP-M acumulado é calculado com os 12 meses ANTERIORES ao período
+// IMPORTANTE: O IGP-M é determinado UMA VEZ na contratação (data atual)
+// e usado para TODOS os ciclos de parcelamento
 //
-// Exemplo com 24 parcelas iniciado em 3/2026:
+// Exemplo com 24 parcelas iniciado em 23/1/2026:
+// - IGP-M de referência: ÚNICO, 12 meses ANTES = 1/2025 a 12/2025
+//
 // - Ciclo 1 (Parcelas 1-12): 
-//   ├─ Período de pagamento: 3/2026 a 2/2027
-//   └─ IGP-M acumulado: 12 meses ANTES = 3/2025 a 2/2026 ✓
+//   ├─ Período de pagamento: 1/2026 a 12/2026
+//   └─ IGP-M acumulado: 1/2025 a 12/2025 ✓ (mesma referência)
 //
 // - Ciclo 2 (Parcelas 13-24):
-//   ├─ Período de pagamento: 3/2027 a 2/2028
-//   └─ IGP-M acumulado: 12 meses ANTES = 3/2026 a 2/2027 ✓
+//   ├─ Período de pagamento: 1/2027 a 12/2027
+//   └─ IGP-M acumulado: 1/2025 a 12/2025 ✓ (MESMA referência)
 //
 // A data de referência é A DATA ATUAL (dataParcelamento)
 // ═══════════════════════════════════════════════════════════════════════════════
-function calcularIndicesPorCicloDeParcelamento(
+export function calcularIndicesPorCicloDeParcelamento(
   numeroParcelas: number,
   dataParcelamento: DataCalculo, // Data de referência (data atual ou data escolhida)
   nomeIndice: string,
@@ -207,7 +210,7 @@ function calcularIndicesPorCicloDeParcelamento(
     dataInicio: DataCalculo
     dataFim: DataCalculo
     periodoDescricao: string
-    dataInicioIGPM: DataCalculo  // Período para buscar IGP-M (12 meses antes)
+    dataInicioIGPM: DataCalculo  // Período para buscar IGP-M (UMA VEZ, 12 meses antes da data atual)
     dataFimIGPM: DataCalculo
     periodoIGPMDescricao: string
   }>
@@ -227,6 +230,39 @@ function calcularIndicesPorCicloDeParcelamento(
   let mesAtual = dataParcelamento.mes
   let anoAtual = dataParcelamento.ano
   let diaAtual = dataParcelamento.dia
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CALCULAR O PERÍODO IGP-M UMA VEZ (para TODOS os ciclos)
+  // IGP-M = 12 meses ANTES da data atual
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // Data de início do IGP-M: 12 meses ANTES da data atual
+  let mesIGPMInicio = mesAtual - 12
+  let anoIGPMInicio = anoAtual
+  while (mesIGPMInicio <= 0) {
+    mesIGPMInicio += 12
+    anoIGPMInicio -= 1
+  }
+
+  const dataInicioIGPMReferencia: DataCalculo = {
+    dia: diaAtual,
+    mes: mesIGPMInicio,
+    ano: anoIGPMInicio,
+  }
+
+  // Data de fim do IGP-M: 11 meses após o início (total 12 meses)
+  let mesIGPMFim = mesIGPMInicio + 11
+  let anoIGPMFim = anoIGPMInicio
+  while (mesIGPMFim > 12) {
+    mesIGPMFim -= 12
+    anoIGPMFim += 1
+  }
+
+  const dataFimIGPMReferencia: DataCalculo = {
+    dia: Math.min(diaAtual, 28),
+    mes: mesIGPMFim,
+    ano: anoIGPMFim,
+  }
 
   let parcelaAtual = 1
 
@@ -256,36 +292,12 @@ function calcularIndicesPorCicloDeParcelamento(
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // CALCULAR PERÍODO IGP-M (12 meses ANTES do ciclo)
+    // USAR O MESMO PERÍODO IGP-M PARA TODOS OS CICLOS
     // ═══════════════════════════════════════════════════════════════════════════
     
-    // Data de início do IGP-M: 12 meses ANTES da data inicial do ciclo
-    let mesIGPMInicio = mesAtual - 12
-    let anoIGPMInicio = anoAtual
-    while (mesIGPMInicio <= 0) {
-      mesIGPMInicio += 12
-      anoIGPMInicio -= 1
-    }
+    const dataInicioIGPM: DataCalculo = dataInicioIGPMReferencia
 
-    const dataInicioIGPM: DataCalculo = {
-      dia: Math.min(diaAtual, 28),
-      mes: mesIGPMInicio,
-      ano: anoIGPMInicio,
-    }
-
-    // Data de fim do IGP-M: 1 mês ANTES da data final do ciclo
-    let mesIGPMFim = mesF - 1
-    let anoIGPMFim = anoF
-    if (mesIGPMFim <= 0) {
-      mesIGPMFim += 12
-      anoIGPMFim -= 1
-    }
-
-    const dataFimIGPM: DataCalculo = {
-      dia: Math.min(diaAtual, 28),
-      mes: mesIGPMFim,
-      ano: anoIGPMFim,
-    }
+    const dataFimIGPM: DataCalculo = dataFimIGPMReferencia
 
     const nomeMeses = [
       "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
