@@ -18,12 +18,9 @@ export async function GET(request: NextRequest) {
     if (indiceParam === "poupanca" || indiceParam === "all") {
       try {
         // Poupança está disponível a partir de maio/2012
-        // Usar uma janela de 10 anos (máximo permitido pela API)
-        const dataInicial = "01/01/1989" // Desde início
-        const dataFinal = formatDateBrazilian(new Date())
-
+        // Deixar proxy-bcb calcular a janela de 10 anos automaticamente
         const respPoupanca = await fetch(
-          `/api/proxy-bcb?serie=25&dataInicial=${encodeURIComponent(dataInicial)}&dataFinal=${encodeURIComponent(dataFinal)}`,
+          `/api/proxy-bcb?serie=25`,
           { cache: "no-store" }
         )
 
@@ -52,12 +49,9 @@ export async function GET(request: NextRequest) {
     // Se nenhuma série foi especificada, buscar ambas
     if (indiceParam === "all" || !indiceParam) {
       try {
-        const dataInicial = "01/01/1989"
-        const dataFinal = formatDateBrazilian(new Date())
-
         const [respPoupanca, igpmData] = await Promise.all([
           fetch(
-            `/api/proxy-bcb?serie=25&dataInicial=${encodeURIComponent(dataInicial)}&dataFinal=${encodeURIComponent(dataFinal)}`,
+            `/api/proxy-bcb?serie=25`,
             { cache: "no-store" }
           ),
           fetchIGPMHistorico(),

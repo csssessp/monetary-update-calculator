@@ -30,12 +30,14 @@ export async function GET(request: NextRequest) {
         const yearEnd = today.getFullYear()
         dataFinal = `${dayEnd}/${monthEnd}/${yearEnd}`
         
-        // Data inicial = 10 anos atrás
+        // Data inicial = 10 anos atrás (usando getFullYear - 10, mantendo mês e dia)
         const tenYearsAgo = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate())
         const dayStart = String(tenYearsAgo.getDate()).padStart(2, "0")
         const monthStart = String(tenYearsAgo.getMonth() + 1).padStart(2, "0")
         const yearStart = tenYearsAgo.getFullYear()
         dataInicial = `${dayStart}/${monthStart}/${yearStart}`
+        
+        console.log(`[Proxy BCB] Série 25 (Poupança): Calculadas datas - ${dataInicial} a ${dataFinal}`)
       }
       
       url += `&dataInicial=${encodeURIComponent(dataInicial)}&dataFinal=${encodeURIComponent(dataFinal)}`
@@ -65,7 +67,13 @@ export async function GET(request: NextRequest) {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
       cache: "no-store",
+    }).catch((err) => {
+      console.error("[Proxy BCB] Erro no fetch da URL:", url)
+      console.error("[Proxy BCB] Erro do fetch:", err)
+      throw err
     })
+
+    console.log(`[Proxy BCB] Status: ${response.status}`)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -103,11 +111,15 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[Proxy BCB] Erro:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error("[Proxy BCB] Erro completo:", errorMessage)
+    console.error("[Proxy BCB] Stack:", error instanceof Error ? error.stack : "N/A")
+    
     return NextResponse.json(
       {
         error: "Erro ao buscar dados da API do BCB",
-        details: error instanceof Error ? error.message : "Erro desconhecido",
+        details: errorMessage,
+        serie: serie,
       },
       { status: 500 }
     )
