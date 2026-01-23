@@ -551,12 +551,10 @@ export async function obterIndicesPeriodo(
       dataAtual = proximoAniversario
     }
   } else {
-    let mesAtual = dataInicial.dia === 1 ? dataInicial.mes : dataInicial.mes + 1
+    // Para IGP-M: sempre começar no mês solicitado, independente do dia
+    // Se dataInicial.dia > 15, ainda contamos o mês inteiro
+    let mesAtual = dataInicial.mes
     let anoAtual = dataInicial.ano
-    if (mesAtual > 12) {
-      mesAtual = 1
-      anoAtual++
-    }
 
     while (anoAtual < dataFinal.ano || (anoAtual === dataFinal.ano && mesAtual <= dataFinal.mes)) {
       const indiceDoMes = indices.find((i) => i.mes === mesAtual && i.ano === anoAtual)
