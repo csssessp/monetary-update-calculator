@@ -944,12 +944,42 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
         memoriaCalculo.push(`Período para cálculo IGP-M acumulado (12 meses ANTES): ${ciclo.periodoIGPMDescricao}`)
         memoriaCalculo.push(``)
         
-        // Buscar índices IGP-M do PERÍODO ANTERIOR (12 meses antes)
-        const indicesIGPMCiclo = await obterIndicesPeriodo(
+        // Tentar buscar IGP-M com fallback para períodos anteriores
+        let indicesIGPMCiclo = await obterIndicesPeriodo(
           ciclo.dataInicioIGPM,
           ciclo.dataFimIGPM,
           "IGP-M"
         )
+        
+        // Se não tiver 12 meses completos, tentar 12 meses antes
+        if (indicesIGPMCiclo.length < 12) {
+          memoriaCalculo.push(`ℹ️ NOTA: Período não contém 12 meses completos (encontrados: ${indicesIGPMCiclo.length}). Tentando período anterior...`)
+          memoriaCalculo.push(``)
+          
+          const dataInicioAnterior: DataCalculo = {
+            dia: ciclo.dataInicioIGPM.dia,
+            mes: ciclo.dataInicioIGPM.mes - 12 <= 0 ? ciclo.dataInicioIGPM.mes - 12 + 12 : ciclo.dataInicioIGPM.mes - 12,
+            ano: ciclo.dataInicioIGPM.mes - 12 <= 0 ? ciclo.dataInicioIGPM.ano - 1 : ciclo.dataInicioIGPM.ano,
+          }
+          
+          const dataFimAnterior: DataCalculo = {
+            dia: ciclo.dataFimIGPM.dia,
+            mes: ciclo.dataFimIGPM.mes - 12 <= 0 ? ciclo.dataFimIGPM.mes - 12 + 12 : ciclo.dataFimIGPM.mes - 12,
+            ano: ciclo.dataFimIGPM.mes - 12 <= 0 ? ciclo.dataFimIGPM.ano - 1 : ciclo.dataFimIGPM.ano,
+          }
+          
+          indicesIGPMCiclo = await obterIndicesPeriodo(dataInicioAnterior, dataFimAnterior, "IGP-M")
+          
+          if (indicesIGPMCiclo.length === 12) {
+            const nomeMeses = [
+              "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]
+            const periodoAnteriorDesc = `${nomeMeses[dataInicioAnterior.mes - 1]}/${dataInicioAnterior.ano} a ${nomeMeses[dataFimAnterior.mes - 1]}/${dataFimAnterior.ano}`
+            memoriaCalculo.push(`✓ Usando período anterior: ${periodoAnteriorDesc}`)
+            memoriaCalculo.push(``)
+          }
+        }
         
         if (indicesIGPMCiclo.length === 12) {
           // Calcular IGP-M acumulado do ciclo
@@ -957,7 +987,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
           const igpmAcumulado = igpmInfo.valor
         const fatorIGPM = 1 + igpmAcumulado / 100
         
-        memoriaCalculo.push(`IGP-M acumulado (${ciclo.periodoIGPMDescricao}): ${igpmAcumulado.toFixed(4)}%`)
+        memoriaCalculo.push(`IGP-M acumulado: ${igpmAcumulado.toFixed(4)}%`)
         memoriaCalculo.push(`Fórmula: (1 + m1) × (1 + m2) × ... × (1 + m12) − 1`)
         memoriaCalculo.push(``)
         memoriaCalculo.push(`Detalhamento dos 12 meses (Tabela):`)
@@ -1068,12 +1098,42 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
         memoriaCalculo.push(`Período para cálculo IGP-M acumulado (12 meses ANTES): ${ciclo.periodoIGPMDescricao}`)
         memoriaCalculo.push(``)
         
-        // Buscar índices IGP-M do PERÍODO ANTERIOR (12 meses antes)
-        const indicesIGPMCiclo = await obterIndicesPeriodo(
+        // Tentar buscar IGP-M com fallback para períodos anteriores
+        let indicesIGPMCiclo = await obterIndicesPeriodo(
           ciclo.dataInicioIGPM,
           ciclo.dataFimIGPM,
           "IGP-M"
         )
+        
+        // Se não tiver 12 meses completos, tentar 12 meses antes
+        if (indicesIGPMCiclo.length < 12) {
+          memoriaCalculo.push(`ℹ️ NOTA: Período não contém 12 meses completos (encontrados: ${indicesIGPMCiclo.length}). Tentando período anterior...`)
+          memoriaCalculo.push(``)
+          
+          const dataInicioAnterior: DataCalculo = {
+            dia: ciclo.dataInicioIGPM.dia,
+            mes: ciclo.dataInicioIGPM.mes - 12 <= 0 ? ciclo.dataInicioIGPM.mes - 12 + 12 : ciclo.dataInicioIGPM.mes - 12,
+            ano: ciclo.dataInicioIGPM.mes - 12 <= 0 ? ciclo.dataInicioIGPM.ano - 1 : ciclo.dataInicioIGPM.ano,
+          }
+          
+          const dataFimAnterior: DataCalculo = {
+            dia: ciclo.dataFimIGPM.dia,
+            mes: ciclo.dataFimIGPM.mes - 12 <= 0 ? ciclo.dataFimIGPM.mes - 12 + 12 : ciclo.dataFimIGPM.mes - 12,
+            ano: ciclo.dataFimIGPM.mes - 12 <= 0 ? ciclo.dataFimIGPM.ano - 1 : ciclo.dataFimIGPM.ano,
+          }
+          
+          indicesIGPMCiclo = await obterIndicesPeriodo(dataInicioAnterior, dataFimAnterior, "IGP-M")
+          
+          if (indicesIGPMCiclo.length === 12) {
+            const nomeMeses = [
+              "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+              "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]
+            const periodoAnteriorDesc = `${nomeMeses[dataInicioAnterior.mes - 1]}/${dataInicioAnterior.ano} a ${nomeMeses[dataFimAnterior.mes - 1]}/${dataFimAnterior.ano}`
+            memoriaCalculo.push(`✓ Usando período anterior: ${periodoAnteriorDesc}`)
+            memoriaCalculo.push(``)
+          }
+        }
         
         if (indicesIGPMCiclo.length === 12) {
           // Calcular IGP-M acumulado do ciclo
