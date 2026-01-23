@@ -1005,7 +1005,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       }
     }
     
-      // Calcular valor final da parcela
+      // Calcular valor final da parcela (DENTRO DO BLOCO IGP-M)
       const valorParcela = valorParcelamentoComIGPM / numeroParcelas
       const valorTotalParcelado = valorParcela * numeroParcelas
       
