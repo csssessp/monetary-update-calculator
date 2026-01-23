@@ -39,25 +39,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Buscar dados do IGP-M via API do BACEN (Série 189)
+    // IGP-M disponível desde 1989, mas API permite max 10 anos por requisição
     if (indiceParam === "igpm" || indiceParam === "all") {
       try {
-        // IGP-M tem periodicidade mensal, disponível desde 1989
-        const dataInicial = "23/01/2016"
-        const dataFinal = formatDateBrazilian(new Date())
-
-        const respIGPM = await fetch(
-          `https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados?formato=json&dataInicial=${dataInicial}&dataFinal=${dataFinal}`,
-          { cache: "no-store" }
-        )
-
-        if (respIGPM.ok) {
-          const dadosIGPM = await respIGPM.json()
-          if (Array.isArray(dadosIGPM)) {
-            indices["IGP-M"] = parseBCBResponse(dadosIGPM, "IGP-M")
-          }
-        }
+        const igpmData = await fetchIGPMHistorico()
+        indices["IGP-M"] = igpmData
       } catch (error) {
-        console.error("Erro ao buscar IGP-M do BACEN:", error)
+        console.error("Erro ao buscar IGP-M:", error)
       }
     }
 
@@ -67,15 +55,12 @@ export async function GET(request: NextRequest) {
         const dataInicial = "23/01/2016"
         const dataFinal = formatDateBrazilian(new Date())
 
-        const [respPoupanca, respIGPM] = await Promise.all([
+        const [respPoupanca, igpmData] = await Promise.all([
           fetch(
             `https://api.bcb.gov.br/dados/serie/bcdata.sgs.195/dados?formato=json&dataInicial=${dataInicial}&dataFinal=${dataFinal}`,
             { cache: "no-store" }
           ),
-          fetch(
-            `https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados?formato=json&dataInicial=${dataInicial}&dataFinal=${dataFinal}`,
-            { cache: "no-store" }
-          ),
+          fetchIGPMHistorico(),
         ])
 
         if (respPoupanca.ok) {
@@ -85,12 +70,7 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        if (respIGPM.ok) {
-          const dadosIGPM = await respIGPM.json()
-          if (Array.isArray(dadosIGPM)) {
-            indices["IGP-M"] = parseBCBResponse(dadosIGPM, "IGP-M")
-          }
-        }
+        indices["IGP-M"] = igpmData
       } catch (error) {
         console.error("Erro ao buscar índices do BACEN:", error)
       }
@@ -108,6 +88,40 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+/**
+ * Buscar histórico completo do IGP-M desde 1989
+ * Usa múltiplas requisições de 10 anos para contornar limite da API BACEN
+ */
+async function fetchIGPMHistorico(): Promise<any[]> {
+  const todosDados: any[] = []
+
+  // Janelas de 10 anos a partir de 1989
+  const janelas = [
+    { inicio: "01/01/1989", fim: "31/12/1998" },
+    { inicio: "01/01/1999", fim: "31/12/2008" },
+    { inicio: "01/01/2009", fim: "31/12/2018" },
+    { inicio: "01/01/2019", fim: "31/12/2026" },
+  ]
+
+  for (const janela of janelas) {
+    try {
+      const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados?formato=json&dataInicial=${janela.inicio}&dataFinal=${janela.fim}`
+      const resp = await fetch(url, { cache: "no-store" })
+
+      if (resp.ok) {
+        const dados = await resp.json()
+        if (Array.isArray(dados)) {
+          todosDados.push(...dados)
+        }
+      }
+    } catch (error) {
+      console.error(`Erro ao buscar IGP-M BACEN (${janela.inicio} - ${janela.fim}):`, error)
+    }
+  }
+
+  return parseBCBResponse(todosDados, "IGP-M")
 }
 
 /**

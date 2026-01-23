@@ -11,13 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Calculator, FileText, AlertTriangle, Download, Database } from "lucide-react" // Added Download icon
+import { Calculator, FileText, AlertTriangle, Download, Database, RefreshCw } from "lucide-react" // Added RefreshCw icon
 import {
   calcularCorrecaoMonetaria,
   validarDatas,
   type ParametrosCalculo,
   type ResultadoCalculo,
 } from "@/lib/calculo-monetario"
+import { atualizarIndicesNoCache } from "@/lib/fetch-indices"
 import { useToast } from "@/components/ui/use-toast"
 import Link from "next/link"
 
@@ -150,6 +151,26 @@ export default function CalculadoraAtualizacaoMonetaria() {
       return
     }
 
+    // ✅ ATUALIZAR ÍNDICES ANTES DO CÁLCULO
+    setAtualizandoIndices(true)
+    setMensagemAtualizacao("🔄 Sincronizando índices com Banco Central...")
+
+    try {
+      const sucesso = await atualizarIndicesNoCache()
+      if (!sucesso) {
+        console.warn("⚠️ Alguns índices não foram atualizados, usando cache local")
+        setMensagemAtualizacao("⚠️ Alguns índices usarão dados em cache")
+      } else {
+        setMensagemAtualizacao("✅ Índices atualizados com sucesso")
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar índices:", error)
+      setMensagemAtualizacao("⚠️ Usando dados em cache local")
+    }
+
+    setAtualizandoIndices(false)
+
+    // ✅ PROSSEGUIR COM O CÁLCULO USANDO OS ÍNDICES ATUALIZADOS
     const dataInicial = {
       dia: Number.parseInt(formData.dataInicial.dia),
       mes: Number.parseInt(formData.dataInicial.mes),
@@ -185,9 +206,11 @@ export default function CalculadoraAtualizacaoMonetaria() {
       const resultadoCalculo = await calcularCorrecaoMonetaria(parametros)
       setResultado(resultadoCalculo)
       setErros(errosData)
+      setMensagemAtualizacao("")
     } catch (error) {
       setErros([`Erro no cálculo: ${error instanceof Error ? error.message : "Erro desconhecido"}`])
       setResultado(null)
+      setMensagemAtualizacao("")
     }
   }
 
@@ -882,16 +905,32 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
 
             <Separator className="my-6" />
 
+            {/* Indicador de Status de Atualização de Índices */}
+            {mensagemAtualizacao && (
+              <Alert className={`mb-4 ${mensagemAtualizacao.startsWith("✅") ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-200"}`}>
+                <AlertDescription className={mensagemAtualizacao.startsWith("✅") ? "text-green-800" : "text-amber-800"}>
+                  {mensagemAtualizacao}
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex flex-col sm:flex-row gap-4 items-center">
-              <Button onClick={executarCalculo} className="w-full sm:w-auto" size="lg">
-                <Calculator className="mr-2 h-4 w-4" />
-                Executar o Cálculo
+              <Button 
+                onClick={executarCalculo} 
+                className="w-full sm:w-auto" 
+                size="lg"
+                disabled={atualizandoIndices}
+              >
+                {atualizandoIndices && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                {!atualizandoIndices && <Calculator className="mr-2 h-4 w-4" />}
+                {atualizandoIndices ? "Atualizando Índices..." : "Executar o Cálculo"}
               </Button>
               <Button
                 onClick={limparFormulario}
                 variant="outline"
                 className="w-full sm:w-auto bg-transparent"
                 size="lg"
+                disabled={atualizandoIndices}
               >
                 Limpar
               </Button>

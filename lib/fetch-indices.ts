@@ -1,32 +1,60 @@
 import { IndiceData } from "./indices-data"
 
-// Fetch IGP-M from FGV using Banco Central API
+// Fetch IGP-M from FGV using Banco Central API with multi-window support (1989-2026)
 async function fetchIGPMFromFGV(): Promise<IndiceData[]> {
   try {
-    // IGP-M via Banco Central SGS API (series 189)
-    const response = await fetch("https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados?formato=json")
+    const todosDados: IndiceData[] = []
 
-    if (!response.ok) {
-      throw new Error(`Banco Central API returned ${response.status}`)
-    }
+    // Janelas de 10 anos para contornar limite da API BACEN
+    const janelas = [
+      { inicio: "01/01/1989", fim: "31/12/1998" },
+      { inicio: "01/01/1999", fim: "31/12/2008" },
+      { inicio: "01/01/2009", fim: "31/12/2018" },
+      { inicio: "01/01/2019", fim: "31/12/2026" },
+    ]
 
-    const data = await response.json() as Array<{ data: string; valor: string }>
-    const indices: IndiceData[] = []
+    for (const janela of janelas) {
+      try {
+        const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados?formato=json&dataInicial=${janela.inicio}&dataFinal=${janela.fim}`
+        const response = await fetch(url, { cache: "no-store" })
 
-    for (const item of data) {
-      const [day, month, year] = item.data.split("/")
-      const valor = parseFloat(item.valor.replace(",", "."))
+        if (response.ok) {
+          const data = await response.json() as Array<{ data: string; valor: string }>
 
-      if (day && month && year && !isNaN(valor)) {
-        indices.push({
-          mes: parseInt(month),
-          ano: parseInt(year),
-          valor,
-        })
+          for (const item of data) {
+            const [day, month, year] = item.data.split("/")
+            const valor = parseFloat(item.valor.replace(",", "."))
+
+            if (day && month && year && !isNaN(valor)) {
+              todosDados.push({
+                mes: parseInt(month),
+                ano: parseInt(year),
+                valor,
+              })
+            }
+          }
+        }
+      } catch (error) {
+        console.warn(`Erro ao buscar janela IGP-M (${janela.inicio} - ${janela.fim}):`, error)
       }
     }
 
-    console.log(`[FETCH] IGP-M: ${indices.length} registros fetched from Banco Central`)
+    // Remover duplicatas e ordenar
+    const mesesMap = new Map<string, IndiceData>()
+    for (const item of todosDados) {
+      const key = `${item.mes}-${item.ano}`
+      // Manter o último valor do mês
+      if (!mesesMap.has(key) || item.mes > 0) {
+        mesesMap.set(key, item)
+      }
+    }
+
+    const indices = Array.from(mesesMap.values()).sort((a, b) => {
+      if (a.ano !== b.ano) return a.ano - b.ano
+      return a.mes - b.mes
+    })
+
+    console.log(`[FETCH] IGP-M: ${indices.length} registros fetched from Banco Central (1989-2026)`)
     return indices
   } catch (error) {
     console.error("Error fetching IGP-M from Banco Central:", error)
@@ -287,4 +315,42 @@ export async function fetchAllIndices(): Promise<{
   }
 
   return results
+}
+
+/**
+ * Atualizar índices no cache local (localStorage)
+ * Chamado antes de cada cálculo para garantir dados atualizados
+ */
+export async function atualizarIndicesNoCache(): Promise<boolean> {
+  try {
+    const indicesObtidos = await fetchAllIndices()
+
+    if (indicesObtidos.successCount === 0) {
+      console.warn("[CACHE] Nenhum índice foi obtido da API")
+      return false
+    }
+
+    // Salvar cada índice no localStorage
+    if (indicesObtidos["IGP-M"].length > 0) {
+      localStorage.setItem("indices_IGP-M", JSON.stringify(indicesObtidos["IGP-M"]))
+    }
+    if (indicesObtidos["IPCA"].length > 0) {
+      localStorage.setItem("indices_IPCA", JSON.stringify(indicesObtidos["IPCA"]))
+    }
+    if (indicesObtidos["INPC"].length > 0) {
+      localStorage.setItem("indices_INPC", JSON.stringify(indicesObtidos["INPC"]))
+    }
+    if (indicesObtidos["Poupança"].length > 0) {
+      localStorage.setItem("indices_Poupança", JSON.stringify(indicesObtidos["Poupança"]))
+    }
+
+    // Salvar timestamp da última atualização
+    localStorage.setItem("indices_timestamp", indicesObtidos.timestamp)
+
+    console.log(`[CACHE] Índices atualizados com sucesso: ${indicesObtidos.successCount} fontes`)
+    return true
+  } catch (error) {
+    console.error("[CACHE] Erro ao atualizar índices no cache:", error)
+    return false
+  }
 }
