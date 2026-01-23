@@ -77,7 +77,8 @@ async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
     const indices: IndiceData[] = []
 
     if (Array.isArray(data)) {
-      // Agrupar por mês-ano e pegar PRIMEIRO valor útil de cada mês
+      // Agrupar por mês-ano e pegar ÚLTIMO valor útil de cada mês
+      // (o valor do último dia do período de aniversário é o correto)
       const monthMap = new Map<string, IndiceData>()
 
       for (const item of data) {
@@ -88,18 +89,16 @@ async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
           const year = parseInt(dateParts[2])
           const dateKey = `${month}-${year}`
 
-          // Pega primeiro valor útil do mês (não precisa ser dia 1)
-          // Se o mês ainda não tem valor, adiciona
-          if (!monthMap.has(dateKey)) {
-            const valor = parseFloat(item.valor.replace(",", "."))
+          // Validar valores
+          const valor = parseFloat(item.valor.replace(",", "."))
 
-            if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor) && valor > 0) {
-              monthMap.set(dateKey, {
-                mes: month,
-                ano: year,
-                valor,
-              })
-            }
+          if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor) && valor > 0) {
+            // Sempre sobrescreve com o valor mais recente (último do mês)
+            monthMap.set(dateKey, {
+              mes: month,
+              ano: year,
+              valor,
+            })
           }
         }
       }
@@ -150,17 +149,16 @@ async function fetchIGPMFromBCB(): Promise<IndiceData[]> {
           const year = parseInt(dateParts[2])
           const dateKey = `${month}-${year}`
 
-          // Pega primeiro valor do mês (série 189 é mensal)
-          if (!monthMap.has(dateKey)) {
-            const valor = parseFloat(item.valor.replace(",", "."))
+          // Pega último valor do mês (mais confiável)
+          const valor = parseFloat(item.valor.replace(",", "."))
 
-            if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor)) {
-              monthMap.set(dateKey, {
-                mes: month,
-                ano: year,
-                valor,
-              })
-            }
+          if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor)) {
+            // Sempre sobrescreve com o valor mais recente (último do mês)
+            monthMap.set(dateKey, {
+              mes: month,
+              ano: year,
+              valor,
+            })
           }
         }
       }
