@@ -18,6 +18,7 @@ import {
   type ParametrosCalculo,
   type ResultadoCalculo,
 } from "@/lib/calculo-monetario"
+import { atualizarIndicesNoCache } from "@/lib/fetch-indices"
 import { useToast } from "@/components/ui/use-toast"
 import Link from "next/link"
 
@@ -65,6 +66,8 @@ export default function CalculadoraAtualizacaoMonetaria() {
 
   const [resultado, setResultado] = useState<ResultadoCalculo | null>(null)
   const [erros, setErros] = useState<string[]>([])
+  const [atualizandoIndices, setAtualizandoIndices] = useState(false)
+  const [mensagemAtualizacao, setMensagemAtualizacao] = useState<string>("")
 
   const obterDataAtualFormatada = () => {
     const agora = new Date()
@@ -148,6 +151,25 @@ export default function CalculadoraAtualizacaoMonetaria() {
       return
     }
 
+    // ✅ ATUALIZAR ÍNDICES ANTES DO CÁLCULO
+    setAtualizandoIndices(true)
+    setMensagemAtualizacao("🔄 Sincronizando índices com Banco Central...")
+
+    try {
+      const sucesso = await atualizarIndicesNoCache()
+      if (!sucesso) {
+        console.warn("⚠️ Alguns índices não foram atualizados, usando cache local")
+        setMensagemAtualizacao("⚠️ Usando dados em cache local - alguns índices não foram sincronizados")
+      } else {
+        setMensagemAtualizacao("✅ Índices atualizados com sucesso - iniciando cálculo...")
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar índices:", error)
+      setMensagemAtualizacao("⚠️ Usando dados em cache local")
+    } finally {
+      setAtualizandoIndices(false)
+    }
+
     // ✅ PROSSEGUIR COM O CÁLCULO USANDO OS ÍNDICES ATUALIZADOS
     const dataInicial = {
       dia: Number.parseInt(formData.dataInicial.dia),
@@ -184,9 +206,11 @@ export default function CalculadoraAtualizacaoMonetaria() {
       const resultadoCalculo = await calcularCorrecaoMonetaria(parametros)
       setResultado(resultadoCalculo)
       setErros(errosData)
+      setMensagemAtualizacao("")
     } catch (error) {
       setErros([`Erro no cálculo: ${error instanceof Error ? error.message : "Erro desconhecido"}`])
       setResultado(null)
+      setMensagemAtualizacao("")
     }
   }
 

@@ -463,21 +463,33 @@ export async function atualizarIndicesNoCache(): Promise<boolean> {
     // Salvar cada índice no localStorage
     if (indicesObtidos["IGP-M"].length > 0) {
       localStorage.setItem("indices_IGP-M", JSON.stringify(indicesObtidos["IGP-M"]))
+      console.log(`[CACHE] ✓ IGP-M: ${indicesObtidos["IGP-M"].length} registros salvos`)
     }
     if (indicesObtidos["IPCA"].length > 0) {
       localStorage.setItem("indices_IPCA", JSON.stringify(indicesObtidos["IPCA"]))
+      console.log(`[CACHE] ✓ IPCA: ${indicesObtidos["IPCA"].length} registros salvos`)
     }
     if (indicesObtidos["INPC"].length > 0) {
       localStorage.setItem("indices_INPC", JSON.stringify(indicesObtidos["INPC"]))
+      console.log(`[CACHE] ✓ INPC: ${indicesObtidos["INPC"].length} registros salvos`)
     }
     if (indicesObtidos["Poupança"].length > 0) {
       localStorage.setItem("indices_Poupança", JSON.stringify(indicesObtidos["Poupança"]))
+      console.log(`[CACHE] ✓ Poupança: ${indicesObtidos["Poupança"].length} registros salvos`)
+    }
+    if (indicesObtidos["SELIC"].length > 0) {
+      localStorage.setItem("indices_SELIC", JSON.stringify(indicesObtidos["SELIC"]))
+      console.log(`[CACHE] ✓ SELIC: ${indicesObtidos["SELIC"].length} registros salvos`)
+    }
+    if (indicesObtidos["CDI"].length > 0) {
+      localStorage.setItem("indices_CDI", JSON.stringify(indicesObtidos["CDI"]))
+      console.log(`[CACHE] ✓ CDI: ${indicesObtidos["CDI"].length} registros salvos`)
     }
 
     // Salvar timestamp da última atualização
     localStorage.setItem("indices_timestamp", indicesObtidos.timestamp)
 
-    console.log(`[CACHE] Índices atualizados com sucesso: ${indicesObtidos.successCount} fontes`)
+    console.log(`[CACHE] ✅ Índices atualizados com sucesso: ${indicesObtidos.successCount} fontes`)
     return true
   } catch (error) {
     console.error("[CACHE] Erro ao atualizar índices no cache:", error)

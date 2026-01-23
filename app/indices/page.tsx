@@ -91,26 +91,36 @@ export default function IndicesPage() {
   const handleAtualizarDosBCB = async () => {
     setAtualizando(true)
     try {
-      const response = await fetch("/api/gerenciar-indices")
-      const novosDados = await response.json()
-
-      if (response.ok && novosDados.error) {
-        toast.error("Não foi possível conectar aos servidores do BCB")
+      // Usar o endpoint de atualização completo que sincroniza com todas as fontes
+      const response = await fetch("/api/atualizar-indices", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+      
+      if (!response.ok) {
+        toast.error("Não foi possível conectar aos servidores de atualização")
         setAtualizando(false)
         return
       }
 
-      // Converter dados do BCB para formato esperado
+      const resultado = await response.json()
+
+      // Se a resposta contém .data, use-a; caso contrário, tente a estrutura alternativa
+      const novosDados = resultado.data || resultado
+
+      // Converter dados para formato esperado
       const allIndices: Indice[] = []
       for (const [name, items] of Object.entries(novosDados)) {
         if (Array.isArray(items)) {
           items.forEach((item: any) => {
-            if (item.mes && item.ano && item.valor !== undefined) {
+            if ((item.mes || item.month) && (item.ano || item.year) && (item.valor || item.value) !== undefined) {
               allIndices.push({
                 name,
-                month: item.mes,
-                year: item.ano,
-                value: item.valor,
+                month: item.mes || item.month,
+                year: item.ano || item.year,
+                value: item.valor || item.value,
                 mes: item.mes,
                 ano: item.ano,
                 valor: item.valor,
@@ -128,10 +138,10 @@ export default function IndicesPage() {
         }),
       )
 
-      toast.success("Índices atualizados com sucesso dos servidores oficiais do BCB!")
+      toast.success(`Índices atualizados com sucesso! ${resultado.successCount || resultado.total || 0} fonte(s) sincronizadas`)
     } catch (error) {
       console.error("Erro ao atualizar índices:", error)
-      toast.error("Erro ao conectar com os servidores do BCB")
+      toast.error("Erro ao conectar com os servidores de atualização")
     } finally {
       setAtualizando(false)
     }
