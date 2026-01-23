@@ -16,22 +16,47 @@ export async function GET(request: NextRequest) {
   try {
     let url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serie}/dados?formato=json`
 
-    // Série 25 (Poupança) requer obrigatoriamente dataInicial e dataFinal
-    // Série 189 (IGP-M) funcionam sem essas parâmetros, mas também funcionam com
-    if (!dataInicial) {
-      dataInicial = "01/01/1989"
+    // Série 25 (Poupança - diária) requer obrigatoriamente dataInicial e dataFinal
+    // BCB permite MÁXIMO 10 anos de dados para séries diárias
+    // Série 189 (IGP-M - mensal) funciona sem essas parâmetros
+    
+    if (serie === "25") {
+      // Para Poupança: forçar last 10 years
+      if (!dataInicial || !dataFinal) {
+        const today = new Date()
+        // Data final = hoje
+        const dayEnd = String(today.getDate()).padStart(2, "0")
+        const monthEnd = String(today.getMonth() + 1).padStart(2, "0")
+        const yearEnd = today.getFullYear()
+        dataFinal = `${dayEnd}/${monthEnd}/${yearEnd}`
+        
+        // Data inicial = 10 anos atrás
+        const tenYearsAgo = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate())
+        const dayStart = String(tenYearsAgo.getDate()).padStart(2, "0")
+        const monthStart = String(tenYearsAgo.getMonth() + 1).padStart(2, "0")
+        const yearStart = tenYearsAgo.getFullYear()
+        dataInicial = `${dayStart}/${monthStart}/${yearStart}`
+      }
+      
+      url += `&dataInicial=${encodeURIComponent(dataInicial)}&dataFinal=${encodeURIComponent(dataFinal)}`
+    } else if (serie === "189") {
+      // Para IGP-M (série mensal), datas são opcionais
+      // Mas se fornecidas, as incluímos
+      if (dataInicial) {
+        url += `&dataInicial=${encodeURIComponent(dataInicial)}`
+      }
+      if (dataFinal) {
+        url += `&dataFinal=${encodeURIComponent(dataFinal)}`
+      }
+    } else {
+      // Série desconhecida: tenta com 10 anos se necessário
+      if (dataInicial) {
+        url += `&dataInicial=${encodeURIComponent(dataInicial)}`
+      }
+      if (dataFinal) {
+        url += `&dataFinal=${encodeURIComponent(dataFinal)}`
+      }
     }
-    if (!dataFinal) {
-      const today = new Date()
-      const day = String(today.getDate()).padStart(2, "0")
-      const month = String(today.getMonth() + 1).padStart(2, "0")
-      const year = today.getFullYear()
-      dataFinal = `${day}/${month}/${year}`
-    }
-
-    // Para série diária (25 - Poupança), datas são obrigatórias
-    // Para série mensal (189 - IGP-M), são opcionais mas incluímos mesmo assim
-    url += `&dataInicial=${encodeURIComponent(dataInicial)}&dataFinal=${encodeURIComponent(dataFinal)}`
 
     console.log(`[Proxy BCB] Buscando série ${serie}: ${url}`)
 
