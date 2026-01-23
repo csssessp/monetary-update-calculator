@@ -64,7 +64,8 @@ async function fetchIGPMFromIpeadata(): Promise<IndiceData[]> {
 async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
   try {
     // Série 25 requer 10 anos máximo - deixar servidor calcular datas automaticamente
-    const url = "/api/proxy-bcb?serie=25"
+    const baseUrl = typeof window !== "undefined" ? "" : "http://localhost:3000"
+    const url = `${baseUrl}/api/proxy-bcb?serie=25`
     const response = await fetch(url, { cache: "no-store", timeout: 10000 })
 
     if (!response.ok) {
@@ -76,10 +77,10 @@ async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
     const indices: IndiceData[] = []
 
     if (Array.isArray(data)) {
-      const processedDates = new Set<string>()
+      // Agrupar por mês-ano e pegar PRIMEIRO valor útil de cada mês
+      const monthMap = new Map<string, IndiceData>()
 
       for (const item of data) {
-        // Usar apenas o primeiro dia de cada mês
         if (item.data && item.valor) {
           const dateParts = item.data.split("/")
           const day = parseInt(dateParts[0])
@@ -87,21 +88,24 @@ async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
           const year = parseInt(dateParts[2])
           const dateKey = `${month}-${year}`
 
-          // Pega apenas primeiro dia do mês
-          if (day === 1 && !processedDates.has(dateKey)) {
+          // Pega primeiro valor útil do mês (não precisa ser dia 1)
+          // Se o mês ainda não tem valor, adiciona
+          if (!monthMap.has(dateKey)) {
             const valor = parseFloat(item.valor.replace(",", "."))
 
-            if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor)) {
-              indices.push({
+            if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor) && valor > 0) {
+              monthMap.set(dateKey, {
                 mes: month,
                 ano: year,
                 valor,
               })
-              processedDates.add(dateKey)
             }
           }
         }
       }
+
+      // Converter map para array
+      indices.push(...Array.from(monthMap.values()))
     }
 
     const resultado = indices.sort((a, b) => {
@@ -123,7 +127,8 @@ async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
  */
 async function fetchIGPMFromBCB(): Promise<IndiceData[]> {
   try {
-    const url = "/api/proxy-bcb?serie=189"
+    const baseUrl = typeof window !== "undefined" ? "" : "http://localhost:3000"
+    const url = `${baseUrl}/api/proxy-bcb?serie=189`
     const response = await fetch(url, { cache: "no-store", timeout: 10000 })
 
     if (!response.ok) {
@@ -136,19 +141,21 @@ async function fetchIGPMFromBCB(): Promise<IndiceData[]> {
     const indices: IndiceData[] = []
 
     if (Array.isArray(data)) {
+      const monthMap = new Map<string, IndiceData>()
+
       for (const item of data) {
         if (item.data && item.valor) {
           const dateParts = item.data.split("/")
-          const day = parseInt(dateParts[0])
           const month = parseInt(dateParts[1])
           const year = parseInt(dateParts[2])
+          const dateKey = `${month}-${year}`
 
-          // Usar primeiro dia do mês
-          if (day === 1) {
+          // Pega primeiro valor do mês (série 189 é mensal)
+          if (!monthMap.has(dateKey)) {
             const valor = parseFloat(item.valor.replace(",", "."))
 
             if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor)) {
-              indices.push({
+              monthMap.set(dateKey, {
                 mes: month,
                 ano: year,
                 valor,
@@ -157,6 +164,8 @@ async function fetchIGPMFromBCB(): Promise<IndiceData[]> {
           }
         }
       }
+
+      indices.push(...Array.from(monthMap.values()))
     }
 
     const resultado = indices.sort((a, b) => {
@@ -195,11 +204,17 @@ export async function fetchAllIndices(): Promise<{
   if (igpmResult.status === "fulfilled" && igpmResult.value.length > 0) {
     results["IGP-M"] = igpmResult.value
     results.successCount++
+    console.log(`[SUCCESS] IGP-M: ${igpmResult.value.length} registros obtidos`)
+  } else {
+    console.warn(`[WARNING] IGP-M: Falha ao obter dados`)
   }
 
   if (poupancaResult.status === "fulfilled" && poupancaResult.value.length > 0) {
     results["Poupança"] = poupancaResult.value
     results.successCount++
+    console.log(`[SUCCESS] Poupança: ${poupancaResult.value.length} registros obtidos`)
+  } else {
+    console.warn(`[WARNING] Poupança: Falha ao obter dados`)
   }
 
   return results
@@ -207,10 +222,18 @@ export async function fetchAllIndices(): Promise<{
 
 /**
  * Atualizar índices no cache local (localStorage)
- * Chamado antes de cada cálculo para garantir dados atualizados
+ * Chamado APENAS no cliente antes de cada cálculo para garantir dados atualizados
+ * ⚠️ APENAS FUNCIONA EM CLIENTE (typeof window !== "undefined")
  */
 export async function atualizarIndicesNoCache(): Promise<boolean> {
   try {
+    // Verificar se estamos em cliente
+    if (typeof window === "undefined") {
+      console.warn("[CACHE] Tentativa de atualizar cache fora do cliente. Ignorando.")
+      return false
+    }
+
+    console.log("[CACHE] Iniciando atualização de índices...")
     const indicesObtidos = await fetchAllIndices()
 
     if (indicesObtidos.successCount === 0) {
@@ -221,18 +244,19 @@ export async function atualizarIndicesNoCache(): Promise<boolean> {
     // Salvar cada índice no localStorage
     if (indicesObtidos["IGP-M"].length > 0) {
       localStorage.setItem("indices_IGP-M", JSON.stringify(indicesObtidos["IGP-M"]))
-      console.log(`[CACHE] ✓ IGP-M: ${indicesObtidos["IGP-M"].length} registros salvos`)
+      console.log(`[CACHE] ✓ IGP-M: ${indicesObtidos["IGP-M"].length} registros salvos no cache`)
     }
 
     if (indicesObtidos["Poupança"].length > 0) {
       localStorage.setItem("indices_Poupança", JSON.stringify(indicesObtidos["Poupança"]))
-      console.log(`[CACHE] ✓ Poupança: ${indicesObtidos["Poupança"].length} registros salvos`)
+      console.log(`[CACHE] ✓ Poupança: ${indicesObtidos["Poupança"].length} registros salvos no cache`)
     }
 
     // Salvar timestamp da última atualização
     localStorage.setItem("indices_timestamp", indicesObtidos.timestamp)
+    localStorage.setItem("indices_last_update", new Date().toLocaleString("pt-BR"))
 
-    console.log(`[CACHE] ✅ Índices atualizados com sucesso: ${indicesObtidos.successCount} fontes`)
+    console.log(`[CACHE] ✅ Todos os índices atualizados com sucesso (${indicesObtidos.successCount} fontes)`)
     return true
   } catch (error) {
     console.error("[CACHE] Erro ao atualizar índices no cache:", error)

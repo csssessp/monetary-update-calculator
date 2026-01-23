@@ -22,6 +22,11 @@ export async function POST(request: NextRequest) {
       console.log(`✓ IGP-M: ${resultado["IGP-M"].length} registros atualizados`)
     }
 
+    if (resultado["Poupança"].length > 0) {
+      indicesAtualizados.push({name: "Poupança", count: resultado["Poupança"].length})
+      console.log(`✓ Poupança: ${resultado["Poupança"].length} registros atualizados`)
+    }
+
     console.log(`Total de índices atualizados: ${resultado.successCount}`)
     console.log("=".repeat(60))
 
@@ -35,12 +40,15 @@ export async function POST(request: NextRequest) {
       message: `${resultado.successCount} índice(s) foram atualizados com sucesso dos sites oficiais: ${mensagemIndices}`,
       data: {
         "IGP-M": resultado["IGP-M"],
+        "Poupança": resultado["Poupança"],
       },
       detalhes: {
-        "IGP-M": `${resultado["IGP-M"].length} registros (Ipeadata)`,
+        "IGP-M": `${resultado["IGP-M"].length} registros (Banco Central)`,
+        "Poupança": `${resultado["Poupança"].length} registros (Banco Central)`,
       },
       fontes: {
-        "IGP-M": "https://ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='IGP12_IGPMG12')?$format=json",
+        "IGP-M": "Banco Central do Brasil",
+        "Poupança": "Banco Central do Brasil",
       }
     })
   } catch (error) {
