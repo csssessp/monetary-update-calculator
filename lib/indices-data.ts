@@ -1228,26 +1228,9 @@ export async function obterIndicesAtualizados(
 ): Promise<IndiceData[]> {
   const nomeCurto = getIndiceNome(nomeIndice)
 
-  // PRIMEIRO: Tentar buscar dados reais do cache de sessão (localStorage no cliente)
-  // Em server-side, usar sessionStorage via variável global
-  let dadosReais: IndiceData[] = []
-  
-  try {
-    // Verificar se estamos em cliente ou servidor
-    if (typeof window !== "undefined") {
-      // Cliente: tentar pegar do localStorage
-      const cached = localStorage.getItem(`indices_${nomeCurto}`)
-      if (cached) {
-        dadosReais = JSON.parse(cached)
-        console.log(`[CACHE] ${nomeCurto}: ${dadosReais.length} registros carregados do cache`)
-      }
-    }
-  } catch (e) {
-    // Silenciosamente ignorar erro de acesso ao localStorage
-  }
-
-  // Se não temos dados reais em cache, usar dados locais como fallback
-  let indicesAUsar = dadosReais.length > 0 ? dadosReais : filtrarLocal(nomeCurto, startMonth, startYear, endMonth, endYear)
+  // SEMPRE usar dados locais do arquivo (fonte de verdade)
+  // Nunca usar localStorage ou cache que pode ter sido corrompido
+  let indicesAUsar = filtrarLocal(nomeCurto, startMonth, startYear, endMonth, endYear)
 
   indicesAUsar.sort((a, b) => {
     if (a.ano !== b.ano) return a.ano - b.ano
@@ -1255,9 +1238,7 @@ export async function obterIndicesAtualizados(
   })
 
   if (indicesAUsar.length === 0) {
-    console.warn(`Nenhum dado encontrado para ${nomeIndice}. Usando dados locais como fallback.`)
-    // Fallback para dados locais se nenhum foi encontrado
-    indicesAUsar = filtrarLocal(nomeCurto, startMonth, startYear, endMonth, endYear)
+    console.warn(`Nenhum dado encontrado para ${nomeIndice}. Verifique se o índice existe em lib/indices-data.ts`)
   }
 
   return indicesAUsar
