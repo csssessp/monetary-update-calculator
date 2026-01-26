@@ -708,7 +708,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   let fatorCorrecao = 1
   memoriaCalculo.push(``)
 
-  memoriaCalculo.push(`=== APLICAÇÃO DOS ÍNDICES IGP-M (MENSAIS) ===`)
+  memoriaCalculo.push(`=== APLICAÇÃO DOS ÍNDICES ${nomeIndice.toUpperCase()} (MENSAIS) ===`)
 
   // Transparência – montar linhas completas com "pendente" quando faltarem dados
   let detalhamentoIGPM: DetalheLinha[] | undefined
