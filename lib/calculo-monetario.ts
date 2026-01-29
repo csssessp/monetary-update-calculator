@@ -1076,13 +1076,6 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
     
       // Calcular valor final da parcela (DENTRO DO BLOCO IGP-M)
       const valorParcela = valorParcelamentoComIGPM / numeroParcelas
-      const valorTotalParcelado = valorParcela * numeroParcelas
-      
-      parcelamento = {
-        numeroParcelas,
-        valorParcela,
-        valorTotalParcelado,
-      }
       
       memoriaCalculo.push(``)
       memoriaCalculo.push(`=== CÁLCULO FINAL DO PARCELAMENTO ===`)
@@ -1129,6 +1122,13 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Total: R$ ${somaParcelasComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
       memoriaCalculo.push(``)
+      
+      // AGORA criar o objeto parcelamento com valores precisos
+      parcelamento = {
+        numeroParcelas,
+        valorParcela: valorParcela, // Primeira parcela
+        valorTotalParcelado: somaParcelasComReajuste, // Total EXATO calculado
+      }
     } else if (nomeIndice === "Poupança") {
       console.log("[CALCULO] Processando parcelamento para Poupança com ciclos IGP-M")
       // Para Poupança, aplicar os MESMOS ciclos de reajuste IGP-M que o IGP-M
@@ -1261,16 +1261,6 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
         }
       }
       
-      // Calcular valor final da parcela
-      const valorParcela = valorParcelamentoPoupanca / numeroParcelas
-      const valorTotalParcelado = valorParcela * numeroParcelas
-      
-      parcelamento = {
-        numeroParcelas,
-        valorParcela,
-        valorTotalParcelado,
-      }
-      
       memoriaCalculo.push(``)
       memoriaCalculo.push(`=== CÁLCULO FINAL DO PARCELAMENTO (POUPANÇA) ===`)
       memoriaCalculo.push(``)
@@ -1314,6 +1304,14 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Total: R$ ${somaParcelasComReajustePoupanca.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
       memoriaCalculo.push(``)
+      
+      // AGORA criar o objeto parcelamento com valores precisos
+      const valorParcela = valorParcelamentoPoupanca / numeroParcelas
+      parcelamento = {
+        numeroParcelas,
+        valorParcela, // Primeira parcela
+        valorTotalParcelado: somaParcelasComReajustePoupanca, // Total EXATO calculado
+      }
     }
   }
 
