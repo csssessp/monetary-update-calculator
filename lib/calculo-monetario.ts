@@ -1102,6 +1102,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       // Rastrear reajustes acumulados para cada parcela
       let reajusteAcumuladoAtual = 1.0
       let parcelasProcessadas = 0
+      let somaParcelasComReajuste = 0 // Somar as parcelas reais com reajustes
       
       for (let i = 1; i <= numeroParcelas; i++) {
         // Determinar qual ciclo esta parcela pertence
@@ -1117,12 +1118,13 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
         
         // Calcular valor da parcela com reajustes acumulados
         const valorParcelaComReajuste = valorParcelaBase * reajusteAcumuladoAtual
-        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} |`)
+        somaParcelasComReajuste += valorParcelaComReajuste
+        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
         parcelasProcessadas++
       }
       
       memoriaCalculo.push(``)
-      memoriaCalculo.push(`Total: R$ ${valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
+      memoriaCalculo.push(`Total: R$ ${somaParcelasComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
       memoriaCalculo.push(``)
     } else if (nomeIndice === "Poupança") {
       console.log("[CALCULO] Processando parcelamento para Poupança com ciclos IGP-M")
@@ -1283,6 +1285,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       
       // Rastrear reajustes acumulados para cada parcela
       let reajusteAcumuladoAtualPoupanca = 1.0
+      let somaParcelasComReajustePoupanca = 0 // Somar as parcelas reais com reajustes
       
       for (let i = 1; i <= numeroParcelas; i++) {
         // Determinar qual ciclo esta parcela pertence
@@ -1298,11 +1301,12 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
         
         // Calcular valor da parcela com reajustes acumulados
         const valorParcelaComReajuste = valorParcelaBase * reajusteAcumuladoAtualPoupanca
-        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} |`)
+        somaParcelasComReajustePoupanca += valorParcelaComReajuste
+        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
       }
       
       memoriaCalculo.push(``)
-      memoriaCalculo.push(`Total: R$ ${valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`)
+      memoriaCalculo.push(`Total: R$ ${somaParcelasComReajustePoupanca.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
       memoriaCalculo.push(``)
     }
   }
