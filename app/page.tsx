@@ -883,14 +883,14 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-sm text-gray-600 mb-1">Valor Original</p>
                     <p className="text-2xl font-bold text-gray-900">
-                      R$ {(resultado.valorOriginal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      R$ {(resultado.valorOriginal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
 
                   <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                     <p className="text-sm text-gray-600 mb-1">Valor Atualizado</p>
                     <p className="text-2xl font-bold text-green-700">
-                      R$ {(resultado.valorCorrigido ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      R$ {(resultado.valorCorrigido ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                 </div>
@@ -900,13 +900,13 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                     <div className="flex justify-between">
                       <span>Valor Corrigido:</span>
                       <span className="font-medium">
-                        R$ {(resultado.valorCorrigido ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        R$ {(resultado.valorCorrigido ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Juros:</span>
                       <span className="font-medium">
-                        R$ {(resultado.juros ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        R$ {(resultado.juros ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
@@ -914,20 +914,20 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                     <div className="flex justify-between">
                       <span>Multa:</span>
                       <span className="font-medium">
-                        R$ {(resultado.multa ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        R$ {(resultado.multa ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Honorários:</span>
                       <span className="font-medium">
-                        R$ {(resultado.honorarios ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        R$ {(resultado.honorarios ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <Separator />
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total:</span>
                       <span className="text-green-600">
-                        R$ {(resultado.valorTotal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        R$ {(resultado.valorTotal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
@@ -986,7 +986,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                       <div>
                         <p className="text-xs text-gray-600">Total</p>
                         <p className="text-2xl font-bold text-green-700">
-                          R$ {resultado.parcelamento.valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          R$ {resultado.parcelamento.valorTotalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                       </div>
                     </div>
@@ -1061,7 +1061,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                                 <td className="px-3 py-2 text-right">{d.fatorAcumulado.toString()}</td>
                                 <td className="px-3 py-2 text-right">
                                   {d.valorAcumulado !== undefined
-                                    ? d.valorAcumulado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+                                    ? d.valorAcumulado.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                     : "-"}
                                 </td>
                               </tr>
@@ -1135,7 +1135,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                                   {d.pendente
                                     ? "-"
                                     : d.valorJurosMensal !== undefined
-                                      ? "R$ " + d.valorJurosMensal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+                                      ? "R$ " + d.valorJurosMensal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                       : "-"}
                                 </td>
                                 <td className="px-3 py-2 text-right">
@@ -1146,9 +1146,9 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                                 <td className="px-3 py-2 text-right">{d.pendente ? "-" : d.fatorMensal?.toFixed(6)}</td>
                                 <td className="px-3 py-2 text-right">
                                   {d.valorTotalComJuros !== undefined
-                                    ? "R$ " + d.valorTotalComJuros.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+                                    ? "R$ " + d.valorTotalComJuros.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                     : d.valorAcumulado !== undefined
-                                      ? "R$ " + d.valorAcumulado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+                                      ? "R$ " + d.valorAcumulado.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                                       : "-"}
                                 </td>
                               </tr>
