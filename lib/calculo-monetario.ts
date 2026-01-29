@@ -956,7 +956,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(`(usar data atual garante que os índices utilizados sejam os atualizados)`)
       memoriaCalculo.push(``)
       
-      let valorParcelamentoComIGPM = parametros.valorOriginal
+      let valorParcelamentoComIGPM = valorCorrigido  // Usar valor já corrigido, não o original
       let cicloAnteriorDetalhes: Array<{ ciclo: number; periodo: string; igpmAcumulado: number; descricao: string }> = []
       
       // Processar cada ciclo
