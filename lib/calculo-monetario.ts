@@ -1049,17 +1049,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
         
         memoriaCalculo.push(`Reajuste a ser aplicado: ${igpmAcumulado.toFixed(4)}%`)
         memoriaCalculo.push(``)
-                memoriaCalculo.push(``)
-        if (ciclo.numero > 1) {
-          // Aplicar o reajuste IGP-M do ciclo anterior no início deste ciclo
-          const fatorReajusteAnterior = 1 + cicloAnteriorDetalhes[cicloAnteriorDetalhes.length - 1].igpmAcumulado / 100
-          valorParcelamentoComIGPM *= fatorReajusteAnterior
-          
-          memoriaCalculo.push(``)
-          memoriaCalculo.push(`Reajuste aplicado no 1º mês deste ciclo (IGP-M do ciclo anterior): ${cicloAnteriorDetalhes[cicloAnteriorDetalhes.length - 1].igpmAcumulado.toFixed(4)}%`)
-          memoriaCalculo.push(`Fator de reajuste: ${fatorReajusteAnterior.toFixed(10)}`)
-          memoriaCalculo.push(`Valor após reajuste: R$ ${valorParcelamentoComIGPM.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-        }
+        memoriaCalculo.push(``)
         
         cicloAnteriorDetalhes = [{
           ciclo: ciclo.numero,
@@ -1089,31 +1079,26 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(`| Parcela | Ciclo | Valor (R$) |`)
       memoriaCalculo.push(`|---------|-------|------------|`)
       
-      // Calcular valor de parcela base (valor CORRIGIDO dividido por número de parcelas)
-      const valorParcelaBase = valorParcelamentoComIGPM / numeroParcelas
-      
-      // Rastrear reajustes acumulados para cada parcela
-      let reajusteAcumuladoAtual = 1.0
-      let parcelasProcessadas = 0
       let parcelasExatas: number[] = [] // Guardar valores exatos para soma precisa
+      let valorAtualPorCiclo = valorParcelamentoComIGPM // Rastrear valor por ciclo
       
       for (let i = 1; i <= numeroParcelas; i++) {
         // Determinar qual ciclo esta parcela pertence
         const numeroCiclo = Math.ceil(i / 12)
+        const posicaoNoCiclo = ((i - 1) % 12) + 1 // 1-12 dentro de cada ciclo
         
-        // Se mudou de ciclo, aplicar o reajuste do ciclo anterior
-        if (i > 1 && (i - 1) % 12 === 0 && cicloAnteriorDetalhes.length > 0) {
-          // Aplicar reajuste do ciclo anterior para as próximas parcelas
+        // Se mudou de ciclo, aplicar o reajuste do ciclo anterior SOBRE O VALOR TOTAL
+        if (posicaoNoCiclo === 1 && i > 1 && cicloAnteriorDetalhes.length > 0) {
+          // Aplicar reajuste do ciclo anterior para recalcular o valor base do novo ciclo
           const cicloAnterior = cicloAnteriorDetalhes[cicloAnteriorDetalhes.length - 1]
           const fatorReajuste = 1 + cicloAnterior.igpmAcumulado / 100
-          reajusteAcumuladoAtual *= fatorReajuste
+          valorAtualPorCiclo *= fatorReajuste
         }
         
-        // Calcular valor EXATO da parcela com reajustes acumulados
-        const valorParcelaExato = valorParcelaBase * reajusteAcumuladoAtual
+        // Calcular valor EXATO da parcela para este ciclo
+        const valorParcelaExato = valorAtualPorCiclo / numeroParcelas
         parcelasExatas.push(valorParcelaExato)
         memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaExato.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
-        parcelasProcessadas++
       }
       
       // Somar valores EXATOS para obter total preciso
@@ -1126,7 +1111,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       // AGORA criar o objeto parcelamento com valores precisos
       parcelamento = {
         numeroParcelas,
-        valorParcela: valorParcela, // Primeira parcela
+        valorParcela: parcelasExatas[0], // Primeira parcela (ciclo 1)
         valorTotalParcelado: somaParcelasComReajuste, // Total EXATO calculado
       }
     } else if (nomeIndice === "Poupança") {
@@ -1241,17 +1226,6 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
           memoriaCalculo.push(`Reajuste a ser aplicado: ${igpmAcumulado.toFixed(4)}%`)
           memoriaCalculo.push(``)
           
-          if (ciclo.numero > 1) {
-            // Aplicar o reajuste IGP-M do ciclo anterior no início deste ciclo
-            const fatorReajusteAnterior = 1 + cicloAnteriorDetalhesPoupanca[cicloAnteriorDetalhesPoupanca.length - 1].igpmAcumulado / 100
-            valorParcelamentoPoupanca *= fatorReajusteAnterior
-            
-            memoriaCalculo.push(``)
-            memoriaCalculo.push(`Reajuste aplicado no 1º mês deste ciclo (IGP-M do ciclo anterior): ${cicloAnteriorDetalhesPoupanca[cicloAnteriorDetalhesPoupanca.length - 1].igpmAcumulado.toFixed(4)}%`)
-            memoriaCalculo.push(`Fator de reajuste: ${fatorReajusteAnterior.toFixed(10)}`)
-            memoriaCalculo.push(`Valor após reajuste: R$ ${valorParcelamentoPoupanca.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-          }
-          
           cicloAnteriorDetalhesPoupanca = [{
             ciclo: ciclo.numero,
             periodo: ciclo.periodoDescricao,
@@ -1274,26 +1248,24 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(`|---------|-------|------------|`)
       
       // Calcular valor de parcela base (valor CORRIGIDO dividido por número de parcelas)
-      const valorParcelaBase = valorParcelamentoPoupanca / numeroParcelas
-      
-      // Rastrear reajustes acumulados para cada parcela
-      let reajusteAcumuladoAtualPoupanca = 1.0
       let parcelasExatasPoupanca: number[] = [] // Guardar valores exatos para soma precisa
+      let valorAtualPorCiclo = valorParcelamentoPoupanca // Rastrear valor por ciclo
       
       for (let i = 1; i <= numeroParcelas; i++) {
         // Determinar qual ciclo esta parcela pertence
         const numeroCiclo = Math.ceil(i / 12)
+        const posicaoNoCiclo = ((i - 1) % 12) + 1 // 1-12 dentro de cada ciclo
         
-        // Se mudou de ciclo, aplicar o reajuste do ciclo anterior
-        if (i > 1 && (i - 1) % 12 === 0 && cicloAnteriorDetalhesPoupanca.length > 0) {
-          // Aplicar reajuste do ciclo anterior para as próximas parcelas
+        // Se mudou de ciclo, aplicar o reajuste do ciclo anterior SOBRE O VALOR TOTAL
+        if (posicaoNoCiclo === 1 && i > 1 && cicloAnteriorDetalhesPoupanca.length > 0) {
+          // Aplicar reajuste do ciclo anterior para recalcular o valor base do novo ciclo
           const cicloAnterior = cicloAnteriorDetalhesPoupanca[cicloAnteriorDetalhesPoupanca.length - 1]
           const fatorReajuste = 1 + cicloAnterior.igpmAcumulado / 100
-          reajusteAcumuladoAtualPoupanca *= fatorReajuste
+          valorAtualPorCiclo *= fatorReajuste
         }
         
-        // Calcular valor EXATO da parcela com reajustes acumulados
-        const valorParcelaExato = valorParcelaBase * reajusteAcumuladoAtualPoupanca
+        // Calcular valor EXATO da parcela para este ciclo
+        const valorParcelaExato = valorAtualPorCiclo / numeroParcelas
         parcelasExatasPoupanca.push(valorParcelaExato)
         memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaExato.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
       }
@@ -1306,10 +1278,9 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(``)
       
       // AGORA criar o objeto parcelamento com valores precisos
-      const valorParcela = valorParcelamentoPoupanca / numeroParcelas
       parcelamento = {
         numeroParcelas,
-        valorParcela, // Primeira parcela
+        valorParcela: parcelasExatasPoupanca[0], // Primeira parcela (ciclo 1)
         valorTotalParcelado: somaParcelasComReajustePoupanca, // Total EXATO calculado
       }
     }
