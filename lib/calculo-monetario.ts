@@ -1102,7 +1102,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       // Rastrear reajustes acumulados para cada parcela
       let reajusteAcumuladoAtual = 1.0
       let parcelasProcessadas = 0
-      let somaParcelasComReajuste = 0 // Somar as parcelas reais com reajustes
+      let parcelasExatas: number[] = [] // Guardar valores exatos para soma precisa
       
       for (let i = 1; i <= numeroParcelas; i++) {
         // Determinar qual ciclo esta parcela pertence
@@ -1116,12 +1116,15 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
           reajusteAcumuladoAtual *= fatorReajuste
         }
         
-        // Calcular valor da parcela com reajustes acumulados
-        const valorParcelaComReajuste = valorParcelaBase * reajusteAcumuladoAtual
-        somaParcelasComReajuste += valorParcelaComReajuste
-        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
+        // Calcular valor EXATO da parcela com reajustes acumulados
+        const valorParcelaExato = valorParcelaBase * reajusteAcumuladoAtual
+        parcelasExatas.push(valorParcelaExato)
+        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaExato.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
         parcelasProcessadas++
       }
+      
+      // Somar valores EXATOS para obter total preciso
+      const somaParcelasComReajuste = parcelasExatas.reduce((acc, val) => acc + val, 0)
       
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Total: R$ ${somaParcelasComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
@@ -1285,7 +1288,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       
       // Rastrear reajustes acumulados para cada parcela
       let reajusteAcumuladoAtualPoupanca = 1.0
-      let somaParcelasComReajustePoupanca = 0 // Somar as parcelas reais com reajustes
+      let parcelasExatasPoupanca: number[] = [] // Guardar valores exatos para soma precisa
       
       for (let i = 1; i <= numeroParcelas; i++) {
         // Determinar qual ciclo esta parcela pertence
@@ -1299,11 +1302,14 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
           reajusteAcumuladoAtualPoupanca *= fatorReajuste
         }
         
-        // Calcular valor da parcela com reajustes acumulados
-        const valorParcelaComReajuste = valorParcelaBase * reajusteAcumuladoAtualPoupanca
-        somaParcelasComReajustePoupanca += valorParcelaComReajuste
-        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaComReajuste.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
+        // Calcular valor EXATO da parcela com reajustes acumulados
+        const valorParcelaExato = valorParcelaBase * reajusteAcumuladoAtualPoupanca
+        parcelasExatasPoupanca.push(valorParcelaExato)
+        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaExato.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
       }
+      
+      // Somar valores EXATOS para obter total preciso
+      const somaParcelasComReajustePoupanca = parcelasExatasPoupanca.reduce((acc, val) => acc + val, 0)
       
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Total: R$ ${somaParcelasComReajustePoupanca.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
