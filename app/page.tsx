@@ -978,16 +978,10 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
                     <h4 className="font-semibold mb-4 text-green-900">✅ Parcelamento Calculado</h4>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       <div>
                         <p className="text-xs text-gray-600">Número de Parcelas</p>
                         <p className="text-2xl font-bold text-green-700">{resultado.parcelamento.numeroParcelas}×</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-600">Valor de Cada Parcela</p>
-                        <p className="text-2xl font-bold text-green-700">
-                          R$ {resultado.parcelamento.valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-600">Total</p>
@@ -999,8 +993,8 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
 
                     <div className="text-xs text-gray-600 p-3 bg-white rounded border border-green-100">
                       <p className="mb-2">
-                        <strong>Observe:</strong> O valor de cada parcela é resultado da divisão do valor total por {resultado.parcelamento.numeroParcelas}.
-                        Confira na Memória de Cálculo (abaixo) o cronograma completo.
+                        <strong>⚠️ Importante:</strong> Os valores das parcelas variam conforme os reajustes por índice (a cada 12 meses). 
+                        Confira na Memória de Cálculo (abaixo) o cronograma completo com os valores individuais de cada parcela.
                       </p>
                     </div>
                   </div>
