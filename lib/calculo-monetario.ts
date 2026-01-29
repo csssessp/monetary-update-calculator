@@ -1080,29 +1080,44 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(`|---------|-------|------------|`)
       
       let parcelasExatas: number[] = [] // Guardar valores exatos para soma precisa
-      let valorAtualPorCiclo = valorParcelamentoComIGPM // Rastrear valor por ciclo
       
-      for (let i = 1; i <= numeroParcelas; i++) {
-        // Determinar qual ciclo esta parcela pertence
-        const numeroCiclo = Math.ceil(i / 12)
-        const posicaoNoCiclo = ((i - 1) % 12) + 1 // 1-12 dentro de cada ciclo
-        
-        // Se mudou de ciclo, aplicar o reajuste do ciclo anterior SOBRE O VALOR TOTAL
-        if (posicaoNoCiclo === 1 && i > 1 && cicloAnteriorDetalhes.length >= numeroCiclo - 1) {
-          // Aplicar reajuste do ciclo anterior para recalcular o valor base do novo ciclo
-          // Para ciclo N, usar cicloAnteriorDetalhes[N-2] (ex: ciclo 2 usa índice 0 = ciclo 1)
-          const cicloAnterior = cicloAnteriorDetalhes[numeroCiclo - 2]
-          const fatorReajuste = 1 + cicloAnterior.igpmAcumulado / 100
-          valorAtualPorCiclo *= fatorReajuste
-        }
-        
-        // Calcular valor EXATO da parcela para este ciclo
-        const valorParcelaExato = valorAtualPorCiclo / numeroParcelas
-        parcelasExatas.push(valorParcelaExato)
-        memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaExato.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
+      // PASSO 1: Calcular o valor total para cada ciclo ANTES de dividir em parcelas
+      // Ciclo 1 (parcelas 1-12): usa valorParcelamentoComIGPM base
+      // Ciclo 2 (parcelas 13-24): aplica reajuste do ciclo 1
+      const ciclosValores: { ciclo: number; valorTotal: number; parcelasNoCiclo: number }[] = []
+      
+      let valorCiclo1 = valorParcelamentoComIGPM // Valor total do ciclo 1 (não dividido ainda)
+      ciclosValores.push({ ciclo: 1, valorTotal: valorCiclo1, parcelasNoCiclo: 12 })
+      
+      // Se há ciclo 2, aplicar reajuste
+      if (numeroParcelas > 12 && cicloAnteriorDetalhes.length > 0) {
+        const cicloAnterior = cicloAnteriorDetalhes[0] // Ciclo 1 está no índice 0
+        const fatorReajuste = 1 + cicloAnterior.igpmAcumulado / 100
+        const valorCiclo2 = valorCiclo1 * fatorReajuste // Aplicar reajuste ao valor total
+        ciclosValores.push({ ciclo: 2, valorTotal: valorCiclo2, parcelasNoCiclo: 12 })
       }
       
-      // Somar valores EXATOS para obter total preciso
+      memoriaCalculo.push(`=== DETALHAMENTO POR CICLO ===`)
+      ciclosValores.forEach(ciclo => {
+        memoriaCalculo.push(`Ciclo ${ciclo.ciclo}: R$ ${ciclo.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ÷ 12 = R$ ${(ciclo.valorTotal / 12).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por parcela`)
+      })
+      memoriaCalculo.push(``)
+      
+      // PASSO 2: Agora dividir cada ciclo em suas parcelas
+      for (let i = 1; i <= numeroParcelas; i++) {
+        const numeroCiclo = Math.ceil(i / 12)
+        const cicloInfo = ciclosValores.find(c => c.ciclo === numeroCiclo)
+        
+        if (cicloInfo) {
+          const valorParcelaExato = cicloInfo.valorTotal / cicloInfo.parcelasNoCiclo
+          parcelasExatas.push(valorParcelaExato)
+          memoriaCalculo.push(`| ${i} | ${numeroCiclo} | ${valorParcelaExato.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`)
+        }
+      }
+      
+      memoriaCalculo.push(``)
+      memoriaCalculo.push(`=== SOMA DAS PARCELAS ===`)
+      // PASSO 3: Somar valores EXATOS para obter total preciso
       const somaParcelasComReajuste = parcelasExatas.reduce((acc, val) => acc + val, 0)
       
       memoriaCalculo.push(``)
