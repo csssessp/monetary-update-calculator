@@ -879,19 +879,19 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   memoriaCalculo.push(``)
   memoriaCalculo.push(`=== RESUMO FINAL ===`)
   memoriaCalculo.push(
-    `Valor original: R$ ${parametros.valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    `Valor original: R$ ${parametros.valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
   )
   memoriaCalculo.push(`Índices utilizados: ${nomeIndice}`)
-  memoriaCalculo.push(`Valor corrigido: R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+  memoriaCalculo.push(`Valor corrigido: R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`)
   memoriaCalculo.push(`Fator de correção: ${fatorCorrecao.toFixed(6)}`)
   if (taxaAnual !== undefined) {
     memoriaCalculo.push(
       `Dias totais: ${diasTotais} | Anos exatos (${convencaoDia}): ${anosExatos} | Taxa anual (${tipoTaxaAnual}): ${taxaAnual}`,
     )
   }
-  memoriaCalculo.push(`Juros: R$ ${juros.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-  memoriaCalculo.push(`Multa: R$ ${multa.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-  memoriaCalculo.push(`Honorários: R$ ${honorarios.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+  memoriaCalculo.push(`Juros: R$ ${juros.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`)
+  memoriaCalculo.push(`Multa: R$ ${multa.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`)
+  memoriaCalculo.push(`Honorários: R$ ${honorarios.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`)
   memoriaCalculo.push(`VALOR TOTAL: R$ ${valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 
   // Fontes
@@ -1070,8 +1070,8 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
       memoriaCalculo.push(``)
       memoriaCalculo.push(`=== CÁLCULO FINAL DO PARCELAMENTO ===`)
       memoriaCalculo.push(``)
-      memoriaCalculo.push(`Valor original: R$ ${parametros.valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-      memoriaCalculo.push(`Valor após todos os reajustes IGP-M: R$ ${valorParcelamentoComIGPM.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
+      memoriaCalculo.push(`Valor original: R$ ${parametros.valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`)
+      memoriaCalculo.push(`Valor após todos os reajustes IGP-M: R$ ${valorParcelamentoComIGPM.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`)
       memoriaCalculo.push(`Número de parcelas: ${numeroParcelas}`)
       memoriaCalculo.push(``)
       memoriaCalculo.push(`Cronograma de Pagamento:`)
