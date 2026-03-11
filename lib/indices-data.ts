@@ -1130,6 +1130,7 @@ export const indicesData = {
     { mes: 12, ano: 2025, valor: 0.6751 },
     // 2026
     { mes: 1, ano: 2026, valor: 0.6707 },
+    { mes: 2, ano: 2026, valor: 0.6750 },
   ],
 } as const
 
@@ -1218,7 +1219,7 @@ async function fetchDB(name: string, startMonth?: number, startYear?: number, en
     .filter((item): item is IndiceData => item !== null) // Remove itens nulos
 }
 
-// Busca do DB; se vazio → fallback local
+// Busca dados mesclando hardcoded local + localStorage (dados do BCB atualizados)
 export async function obterIndicesAtualizados(
   nomeIndice: string,
   startMonth?: number,
@@ -1228,11 +1229,44 @@ export async function obterIndicesAtualizados(
 ): Promise<IndiceData[]> {
   const nomeCurto = getIndiceNome(nomeIndice)
 
-  // SEMPRE usar dados locais do arquivo (fonte de verdade)
-  // Nunca usar localStorage ou cache que pode ter sido corrompido
-  let indicesAUsar = filtrarLocal(nomeCurto, startMonth, startYear, endMonth, endYear)
+  // 1. Dados hardcoded locais (fallback confiável)
+  const dadosLocais = filtrarLocal(nomeCurto, startMonth, startYear, endMonth, endYear)
 
-  indicesAUsar.sort((a, b) => {
+  // 2. Mesclar com dados atualizados do BCB salvos no localStorage
+  //    (populados por atualizarIndicesNoCache em fetch-indices.ts)
+  const mapa = new Map<string, IndiceData>()
+  dadosLocais.forEach((d) => mapa.set(`${d.ano}-${d.mes}`, d))
+
+  if (typeof window !== "undefined") {
+    try {
+      const chave = `indices_${nomeCurto}`
+      const stored = localStorage.getItem(chave)
+      if (stored) {
+        const dadosBCB: IndiceData[] = JSON.parse(stored)
+        if (Array.isArray(dadosBCB)) {
+          dadosBCB.forEach((d) => {
+            if (d && typeof d.mes === "number" && typeof d.ano === "number" && typeof d.valor === "number") {
+              // Dados do BCB sobrescrevem locais (são mais recentes/precisos)
+              const key = `${d.ano}-${d.mes}`
+              // Aplicar filtro de data
+              if (startMonth !== undefined && startYear !== undefined) {
+                if (d.ano < startYear || (d.ano === startYear && d.mes < startMonth)) return
+              }
+              if (endMonth !== undefined && endYear !== undefined) {
+                if (d.ano > endYear || (d.ano === endYear && d.mes > endMonth)) return
+              }
+              mapa.set(key, d)
+            }
+          })
+          console.log(`✓ ${nomeCurto}: mesclados ${dadosBCB.length} registros do BCB com ${dadosLocais.length} locais`)
+        }
+      }
+    } catch (error) {
+      console.error(`Erro ao ler dados BCB do localStorage para ${nomeCurto}:`, error)
+    }
+  }
+
+  const indicesAUsar = Array.from(mapa.values()).sort((a, b) => {
     if (a.ano !== b.ano) return a.ano - b.ano
     return a.mes - b.mes
   })

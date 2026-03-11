@@ -17,14 +17,11 @@ export async function POST(request: NextRequest) {
 
     // Log which indices were updated
     const indicesAtualizados: Array<{name: string, count: number}> = []
-    if (resultado["IGP-M"].length > 0) {
-      indicesAtualizados.push({name: "IGP-M", count: resultado["IGP-M"].length})
-      console.log(`✓ IGP-M: ${resultado["IGP-M"].length} registros atualizados`)
-    }
-
-    if (resultado["Poupança"].length > 0) {
-      indicesAtualizados.push({name: "Poupança", count: resultado["Poupança"].length})
-      console.log(`✓ Poupança: ${resultado["Poupança"].length} registros atualizados`)
+    for (const nome of ["IGP-M", "Poupança", "IPCA", "INPC"] as const) {
+      if (resultado[nome].length > 0) {
+        indicesAtualizados.push({name: nome, count: resultado[nome].length})
+        console.log(`✓ ${nome}: ${resultado[nome].length} registros atualizados`)
+      }
     }
 
     console.log(`Total de índices atualizados: ${resultado.successCount}`)
@@ -32,24 +29,26 @@ export async function POST(request: NextRequest) {
 
     const mensagemIndices = indicesAtualizados.map(i => `${i.name} (${i.count} registros)`).join(", ")
 
+    const data: Record<string, any> = {}
+    const detalhes: Record<string, string> = {}
+    const fontes: Record<string, string> = {}
+    for (const nome of ["IGP-M", "Poupança", "IPCA", "INPC"] as const) {
+      if (resultado[nome].length > 0) {
+        data[nome] = resultado[nome]
+        detalhes[nome] = `${resultado[nome].length} registros (Banco Central)`
+        fontes[nome] = "Banco Central do Brasil"
+      }
+    }
+
     return NextResponse.json({
       success: true,
       indicesAtualizados: indicesAtualizados,
       total: resultado.successCount,
       timestamp: resultado.timestamp,
       message: `${resultado.successCount} índice(s) foram atualizados com sucesso dos sites oficiais: ${mensagemIndices}`,
-      data: {
-        "IGP-M": resultado["IGP-M"],
-        "Poupança": resultado["Poupança"],
-      },
-      detalhes: {
-        "IGP-M": `${resultado["IGP-M"].length} registros (Banco Central)`,
-        "Poupança": `${resultado["Poupança"].length} registros (Banco Central)`,
-      },
-      fontes: {
-        "IGP-M": "Banco Central do Brasil",
-        "Poupança": "Banco Central do Brasil",
-      }
+      data,
+      detalhes,
+      fontes,
     })
   } catch (error) {
     console.error("Erro ao atualizar índices:", error)

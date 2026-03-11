@@ -58,19 +58,35 @@ async function fetchIGPMFromIpeadata(): Promise<IndiceData[]> {
 }
 
 /**
- * Buscar Poupança do BCB (série 25 - rentabilidade mensal acumulada)
- * Série: 25 (Poupança - % mensal acumulado por aniversário)
+ * Construir URL para API BCB SGS - funciona tanto server-side (direto) quanto client-side (via proxy)
+ */
+function buildBCBUrl(serie: number): string {
+  if (typeof window !== "undefined") {
+    // Client-side: usar proxy para contornar CORS
+    return `/api/proxy-bcb?serie=${serie}`
+  }
+  // Server-side: chamar API do BCB diretamente
+  const dataFinal = new Date()
+  const dataInicial = new Date()
+  dataInicial.setFullYear(dataInicial.getFullYear() - 10)
+  const fmt = (d: Date) =>
+    `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
+  return `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serie}/dados?formato=json&dataInicial=${fmt(dataInicial)}&dataFinal=${fmt(dataFinal)}`
+}
+
+/**
+ * Buscar Poupança do BCB (série 195 - remuneração mensal dos depósitos de poupança)
  */
 async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
   try {
-    // Série 25 requer 10 anos máximo - deixar servidor calcular datas automaticamente
-    const baseUrl = typeof window !== "undefined" ? "" : "http://localhost:3000"
-    const url = `${baseUrl}/api/proxy-bcb?serie=25`
-    const response = await fetch(url, { cache: "no-store", timeout: 10000 })
+    const url = buildBCBUrl(195)
+    console.log(`[FETCH] Buscando Poupança: ${url}`)
+    const response = await fetch(url, { cache: "no-store" })
 
     if (!response.ok) {
-      console.warn(`BCB API (Poupança) returned ${response.status}`)
-      return []
+      console.warn(`BCB API (Poupança série 195) returned ${response.status}, tentando série 25...`)
+      // Fallback: série 25 (diária) via proxy
+      return await fetchPoupancaSerie25()
     }
 
     const data = await response.json()
@@ -116,6 +132,45 @@ async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
     return resultado
   } catch (error) {
     console.error("Error fetching Poupança from BCB:", error)
+    // Tentar série 25 como último recurso
+    try {
+      return await fetchPoupancaSerie25()
+    } catch {
+      return []
+    }
+  }
+}
+
+/**
+ * Fallback: Buscar Poupança do BCB (série 25 - diária)
+ */
+async function fetchPoupancaSerie25(): Promise<IndiceData[]> {
+  try {
+    const url = buildBCBUrl(25)
+    console.log(`[FETCH] Poupança BCB (série 25 fallback): ${url}`)
+    const response = await fetch(url, { cache: "no-store" })
+    if (!response.ok) return []
+
+    const data = await response.json()
+    const indices: IndiceData[] = []
+    if (Array.isArray(data)) {
+      const monthMap = new Map<string, IndiceData>()
+      for (const item of data) {
+        if (item.data && item.valor) {
+          const dateParts = item.data.split("/")
+          const month = parseInt(dateParts[1])
+          const year = parseInt(dateParts[2])
+          const valor = parseFloat(item.valor.replace(",", "."))
+          if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor) && valor > 0) {
+            monthMap.set(`${month}-${year}`, { mes: month, ano: year, valor })
+          }
+        }
+      }
+      indices.push(...Array.from(monthMap.values()))
+    }
+    return indices.sort((a, b) => a.ano - b.ano || a.mes - b.mes)
+  } catch (error) {
+    console.error("Error fetching Poupança série 25:", error)
     return []
   }
 }
@@ -126,9 +181,9 @@ async function fetchPoupancaFromBCB(): Promise<IndiceData[]> {
  */
 async function fetchIGPMFromBCB(): Promise<IndiceData[]> {
   try {
-    const baseUrl = typeof window !== "undefined" ? "" : "http://localhost:3000"
-    const url = `${baseUrl}/api/proxy-bcb?serie=189`
-    const response = await fetch(url, { cache: "no-store", timeout: 10000 })
+    const url = buildBCBUrl(189)
+    console.log(`[FETCH] Buscando IGP-M: ${url}`)
+    const response = await fetch(url, { cache: "no-store" })
 
     if (!response.ok) {
       console.warn(`BCB API (IGP-M) returned ${response.status}`)
@@ -180,23 +235,65 @@ async function fetchIGPMFromBCB(): Promise<IndiceData[]> {
   }
 }
 
+/**
+ * Buscar série genérica do BCB SGS e extrair dados mensais
+ */
+async function fetchSerieBCBGenerica(serie: number, nome: string): Promise<IndiceData[]> {
+  try {
+    const url = buildBCBUrl(serie)
+    console.log(`[FETCH] Buscando ${nome} (série ${serie}): ${url}`)
+    const response = await fetch(url, { cache: "no-store" })
+    if (!response.ok) {
+      console.warn(`BCB API (${nome} série ${serie}) returned ${response.status}`)
+      return []
+    }
+    const data = await response.json()
+    if (!Array.isArray(data)) return []
+
+    const monthMap = new Map<string, IndiceData>()
+    for (const item of data) {
+      if (item.data && item.valor) {
+        const dateParts = item.data.split("/")
+        const month = parseInt(dateParts[1])
+        const year = parseInt(dateParts[2])
+        const valor = parseFloat(item.valor.replace(",", "."))
+        if (year >= 1980 && month >= 1 && month <= 12 && !isNaN(valor)) {
+          monthMap.set(`${month}-${year}`, { mes: month, ano: year, valor })
+        }
+      }
+    }
+    const resultado = Array.from(monthMap.values()).sort((a, b) => a.ano - b.ano || a.mes - b.mes)
+    console.log(`[FETCH] ${nome}: ${resultado.length} registros`)
+    return resultado
+  } catch (error) {
+    console.error(`Error fetching ${nome}:`, error)
+    return []
+  }
+}
+
 export async function fetchAllIndices(): Promise<{
   "IGP-M": IndiceData[]
   "Poupança": IndiceData[]
+  "IPCA": IndiceData[]
+  "INPC": IndiceData[]
   timestamp: string
   successCount: number
 }> {
   const results = {
     "IGP-M": [] as IndiceData[],
     "Poupança": [] as IndiceData[],
+    "IPCA": [] as IndiceData[],
+    "INPC": [] as IndiceData[],
     timestamp: new Date().toISOString(),
     successCount: 0,
   }
 
-  // Fetch IGP-M e Poupança em paralelo
-  const [igpmResult, poupancaResult] = await Promise.allSettled([
+  // Fetch todos os índices em paralelo
+  const [igpmResult, poupancaResult, ipcaResult, inpcResult] = await Promise.allSettled([
     fetchIGPMFromBCB(),
     fetchPoupancaFromBCB(),
+    fetchSerieBCBGenerica(433, "IPCA"),
+    fetchSerieBCBGenerica(188, "INPC"),
   ])
 
   if (igpmResult.status === "fulfilled" && igpmResult.value.length > 0) {
@@ -213,6 +310,22 @@ export async function fetchAllIndices(): Promise<{
     console.log(`[SUCCESS] Poupança: ${poupancaResult.value.length} registros obtidos`)
   } else {
     console.warn(`[WARNING] Poupança: Falha ao obter dados`)
+  }
+
+  if (ipcaResult.status === "fulfilled" && ipcaResult.value.length > 0) {
+    results["IPCA"] = ipcaResult.value
+    results.successCount++
+    console.log(`[SUCCESS] IPCA: ${ipcaResult.value.length} registros obtidos`)
+  } else {
+    console.warn(`[WARNING] IPCA: Falha ao obter dados`)
+  }
+
+  if (inpcResult.status === "fulfilled" && inpcResult.value.length > 0) {
+    results["INPC"] = inpcResult.value
+    results.successCount++
+    console.log(`[SUCCESS] INPC: ${inpcResult.value.length} registros obtidos`)
+  } else {
+    console.warn(`[WARNING] INPC: Falha ao obter dados`)
   }
 
   return results
@@ -248,6 +361,16 @@ export async function atualizarIndicesNoCache(): Promise<boolean> {
     if (indicesObtidos["Poupança"].length > 0) {
       localStorage.setItem("indices_Poupança", JSON.stringify(indicesObtidos["Poupança"]))
       console.log(`[CACHE] ✓ Poupança: ${indicesObtidos["Poupança"].length} registros salvos no cache`)
+    }
+
+    if (indicesObtidos["IPCA"].length > 0) {
+      localStorage.setItem("indices_IPCA", JSON.stringify(indicesObtidos["IPCA"]))
+      console.log(`[CACHE] ✓ IPCA: ${indicesObtidos["IPCA"].length} registros salvos no cache`)
+    }
+
+    if (indicesObtidos["INPC"].length > 0) {
+      localStorage.setItem("indices_INPC", JSON.stringify(indicesObtidos["INPC"]))
+      console.log(`[CACHE] ✓ INPC: ${indicesObtidos["INPC"].length} registros salvos no cache`)
     }
 
     // Salvar timestamp da última atualização
