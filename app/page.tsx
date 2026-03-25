@@ -6,12 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Calculator, AlertTriangle, Download, FileText, Clock } from "lucide-react"
+import { Calculator, AlertTriangle, Download, FileText, Loader2, RefreshCw, CreditCard, TrendingUp, Landmark, PiggyBank, BarChart2, Activity, DollarSign } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   calcularCorrecaoMonetaria,
   validarDatas,
@@ -68,8 +68,6 @@ export default function CalculadoraAtualizacaoMonetaria() {
   const [atualizandoIndices, setAtualizandoIndices] = useState(false)
   const [mensagemAtualizacao, setMensagemAtualizacao] = useState<string>("")
   const [calculando, setCalculando] = useState(false)
-  const [progresso, setProgresso] = useState(0)
-  const [tempoDecorrido, setTempoDecorrido] = useState(0)
 
   const obterDataAtualFormatada = () => {
     const agora = new Date()
@@ -145,18 +143,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
   const executarCalculo = async () => {
     console.log("[CALCULAR] Iniciando cálculo...")
     setCalculando(true)
-    setProgresso(0)
-    setTempoDecorrido(0)
-    
-    // Simular progresso enquanto calcula
-    const intervaloProgresso = setInterval(() => {
-      setProgresso((prev) => {
-        if (prev < 90) return prev + Math.random() * 30
-        return prev
-      })
-      setTempoDecorrido((prev) => prev + 1)
-    }, 300)
-    
+
     const novosErros: string[] = []
     const valorNumerico = parseBrazilianNumber(formData.valor)
     if (!formData.valor || valorNumerico <= 0) novosErros.push("Valor deve ser maior que zero")
@@ -170,6 +157,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
       console.log("[CALCULAR] Erros de validação:", novosErros)
       setErros(novosErros)
       setResultado(null)
+      setCalculando(false)
       return
     }
 
@@ -228,7 +216,6 @@ export default function CalculadoraAtualizacaoMonetaria() {
       console.log("[CALCULAR] Parâmetros:", parametros)
       const resultadoCalculo = await calcularCorrecaoMonetaria(parametros)
       console.log("[CALCULAR] Resultado:", resultadoCalculo)
-      setProgresso(100)
       setResultado(resultadoCalculo)
       setErros(errosData)
       setMensagemAtualizacao("")
@@ -238,9 +225,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
       setResultado(null)
       setMensagemAtualizacao("")
     } finally {
-      clearInterval(intervaloProgresso)
       setCalculando(false)
-      setTimeout(() => setProgresso(0), 1000)
     }
   }
 
@@ -460,12 +445,11 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
   const isPoupanca = formData.indice.includes("Poupança")
 
   return (
-    <div className="min-h-screen bg-gray-50 py-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-4">
       <div className="container mx-auto px-4 max-w-6xl">
-        {/* Cabeçalho compacto e institucional */}
-        <div className="bg-white border-b border-gray-200 -mx-4 px-4 py-3 mb-8">
+        {/* Cabeçalho institucional */}
+        <div className="bg-white border-b border-gray-200 shadow-sm -mx-4 px-4 py-3 mb-6">
           <div className="max-w-6xl mx-auto flex items-center gap-6">
-            {/* Logo à esquerda */}
             <div className="flex-shrink-0">
               <img 
                 src="/images/secretaria-saude-sp.png" 
@@ -473,50 +457,107 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                 className="h-24 w-auto"
               />
             </div>
-            
-            {/* Título e descrição à direita */}
             <div className="flex-1">
               <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                 <Calculator className="h-6 w-6 text-blue-600" />
                 Calculadora de Atualização Monetária
               </h1>
-              <p className="text-sm text-gray-600 mt-1">CGOF - Correção Monetária, Juros, Multa e Honorários</p>
+              <p className="text-sm text-gray-500 mt-1">CGOF — Correção Monetária, Juros, Multa e Honorários</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-8 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold mb-2 text-gray-800">Sobre os Índices</h3>
-          <p className="text-gray-600 mb-4">Dados oficiais do Banco Central, FGV e IBGE</p>
-          <div className="text-sm text-gray-500 mb-4">
-            <p>• Poupança: debit.com.br</p>
-            <p>• IGP-M: Fundação Getúlio Vargas</p>
-            <p>• CDI: Banco Central do Brasil</p>
-            <p>• IPCA: IBGE</p>
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl shadow-sm border border-blue-100 mb-6">
+          <h3 className="text-lg font-bold mb-1 text-blue-900 flex items-center gap-2">
+            <BarChart2 className="h-5 w-5 text-blue-600" />
+            Sobre os Índices
+          </h3>
+          <p className="text-sm text-blue-700 mb-4">Dados oficiais atualizados mensalmente via API do Banco Central do Brasil</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
+              <TrendingUp className="h-5 w-5 text-orange-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">IGP-M (FGV)</p>
+                <p className="text-xs text-gray-500">Índice Geral de Preços – Mercado</p>
+                <p className="text-xs text-blue-600 mt-1">Fundação Getúlio Vargas · BCB Série 189</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
+              <Activity className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">IPCA (IBGE)</p>
+                <p className="text-xs text-gray-500">Índice Nacional de Preços ao Consumidor Amplo</p>
+                <p className="text-xs text-blue-600 mt-1">IBGE · BCB Série 433</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
+              <Activity className="h-5 w-5 text-teal-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">INPC (IBGE)</p>
+                <p className="text-xs text-gray-500">Índice Nacional de Preços ao Consumidor</p>
+                <p className="text-xs text-blue-600 mt-1">IBGE · BCB Série 188</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
+              <PiggyBank className="h-5 w-5 text-pink-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">Poupança</p>
+                <p className="text-xs text-gray-500">Rendimento mensal da Caderneta de Poupança</p>
+                <p className="text-xs text-blue-600 mt-1">Banco Central do Brasil · BCB Série 195</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
+              <Landmark className="h-5 w-5 text-indigo-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">CDI</p>
+                <p className="text-xs text-gray-500">Certificado de Depósito Interbancário</p>
+                <p className="text-xs text-blue-600 mt-1">B3/CETIP · BCB Série 4391</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
+              <DollarSign className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">SELIC</p>
+                <p className="text-xs text-gray-500">Taxa Básica de Juros da Economia</p>
+                <p className="text-xs text-blue-600 mt-1">Banco Central do Brasil · BCB Série 4390</p>
+              </div>
+            </div>
+            <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
+              <RefreshCw className="h-5 w-5 text-violet-500 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-semibold text-gray-800 text-sm">TR (Taxa Referencial)</p>
+                <p className="text-xs text-gray-500">Taxa de remuneração de depósitos de poupança</p>
+                <p className="text-xs text-blue-600 mt-1">Banco Central do Brasil · BCB Série 226</p>
+              </div>
+            </div>
           </div>
-
         </div>
 
         <Card className="mb-6">
           <CardContent className="p-6">
-            {calculando && (
-              <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-center gap-3 mb-3">
-                  <Clock className="h-5 w-5 text-blue-600 animate-spin" />
-                  <span className="text-blue-700 font-semibold">Processando cálculo...</span>
-                  <span className="text-blue-600 text-sm ml-auto">{tempoDecorrido}s</span>
+            <Dialog open={calculando}>
+              <DialogContent className="sm:max-w-sm" onInteractOutside={(e) => e.preventDefault()}>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-3 justify-center">
+                    <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
+                    Processando Cálculo
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="py-6 text-center">
+                  {atualizandoIndices ? (
+                    <>
+                      <p className="text-blue-700 font-medium mb-2">🔄 Sincronizando com Banco Central...</p>
+                      <p className="text-sm text-gray-500">Buscando índices atualizados</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-blue-700 font-medium mb-2">Calculando correção monetária...</p>
+                      <p className="text-sm text-gray-500">Aguarde enquanto processamos os dados</p>
+                    </>
+                  )}
                 </div>
-                <div className="w-full bg-blue-200 rounded-full h-3 overflow-hidden">
-                  <div 
-                    className="bg-blue-600 h-full transition-all duration-300 ease-out rounded-full"
-                    style={{ width: `${Math.min(progresso, 100)}%` }}
-                  ></div>
-                </div>
-                <div className="text-center text-blue-600 text-sm mt-2 font-medium">
-                  {Math.min(Math.round(progresso), 100)}%
-                </div>
-              </div>
-            )}
+              </DialogContent>
+            </Dialog>
             <Alert className="mb-6 border-red-200 bg-red-50">
               <AlertTriangle className="h-4 w-4 text-red-600" />
               <AlertDescription className="text-red-700 font-medium">
@@ -536,21 +577,6 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                 </AlertDescription>
               </Alert>
             )}
-
-            <div className="mb-6">
-              <Label htmlFor="descricao" className="text-base font-semibold mb-2 block">
-                Descrição do Cálculo
-              </Label>
-              <Textarea
-                id="descricao"
-                placeholder="Descreva o cálculo que será realizado..."
-                value={formData.descricao}
-                onChange={(e) => handleInputChange("descricao", e.target.value)}
-                className="min-h-[100px]"
-              />
-            </div>
-
-            <Separator className="my-6" />
 
             <div className="mb-6">
               <h3 className="text-lg font-semibold mb-4">Valor e Datas para Atualização</h3>
@@ -825,10 +851,39 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
 
             <Separator className="my-6" />
 
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-amber-600" />
+                Parcelamento (Opcional)
+              </h3>
+              <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
+                <p className="text-sm text-gray-600 mb-3">
+                  Divida o valor total em parcelas. Para calcular com parcelamento, informe o número de parcelas antes de calcular:
+                </p>
+                <div className="max-w-xs">
+                  <Label htmlFor="numeroParcelas" className="text-sm font-medium mb-2 block">
+                    Número de Parcelas
+                  </Label>
+                  <Input
+                    id="numeroParcelas"
+                    type="number"
+                    min="1"
+                    max="360"
+                    placeholder="Ex: 12, 24, 36... (deixe vazio para não parcelar)"
+                    value={formData.numeroParcelas || ""}
+                    onChange={(e) => handleInputChange("numeroParcelas", e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator className="my-6" />
+
             <div className="flex flex-col sm:flex-row gap-4 items-center">
               <Button 
                 onClick={executarCalculo} 
-                className="w-full sm:w-auto" 
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700" 
                 size="lg"
                 disabled={calculando}
               >
@@ -926,46 +981,6 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                         R$ {(resultado.valorTotal ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
-                  </div>
-                </div>
-
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                {/* PARCELAMENTO                                                   */}
-                {/* ═══════════════════════════════════════════════════════════════ */}
-                <Separator className="mt-6" />
-
-                <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-200">
-                  <h4 className="font-semibold mb-4">📋 Parcelamento (Opcional)</h4>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Divida o valor total em parcelas iguais. Digite o número de parcelas desejadas:
-                  </p>
-
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1">
-                      <Label htmlFor="numeroParcelas" className="text-sm font-medium mb-2 block">
-                        Número de Parcelas
-                      </Label>
-                      <Input
-                        id="numeroParcelas"
-                        type="number"
-                        min="1"
-                        max="360"
-                        placeholder="Ex: 12, 24, 36..."
-                        value={formData.numeroParcelas || ""}
-                        onChange={(e) => handleInputChange("numeroParcelas", e.target.value)}
-                        className="w-full"
-                      />
-                    </div>
-                    <Button
-                      onClick={() => {
-                        if (formData.numeroParcelas) {
-                          executarCalculo()
-                        }
-                      }}
-                      className="mb-0"
-                    >
-                      Calcular Parcelas
-                    </Button>
                   </div>
                 </div>
 
