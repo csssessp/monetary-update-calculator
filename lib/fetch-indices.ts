@@ -276,6 +276,9 @@ export async function fetchAllIndices(): Promise<{
   "Poupança": IndiceData[]
   "IPCA": IndiceData[]
   "INPC": IndiceData[]
+  "CDI": IndiceData[]
+  "SELIC": IndiceData[]
+  "TR": IndiceData[]
   timestamp: string
   successCount: number
 }> {
@@ -284,48 +287,43 @@ export async function fetchAllIndices(): Promise<{
     "Poupança": [] as IndiceData[],
     "IPCA": [] as IndiceData[],
     "INPC": [] as IndiceData[],
+    "CDI": [] as IndiceData[],
+    "SELIC": [] as IndiceData[],
+    "TR": [] as IndiceData[],
     timestamp: new Date().toISOString(),
     successCount: 0,
   }
 
   // Fetch todos os índices em paralelo
-  const [igpmResult, poupancaResult, ipcaResult, inpcResult] = await Promise.allSettled([
-    fetchIGPMFromBCB(),
-    fetchPoupancaFromBCB(),
-    fetchSerieBCBGenerica(433, "IPCA"),
-    fetchSerieBCBGenerica(188, "INPC"),
-  ])
+  const [igpmResult, poupancaResult, ipcaResult, inpcResult, cdiResult, selicResult, trResult] =
+    await Promise.allSettled([
+      fetchIGPMFromBCB(),
+      fetchPoupancaFromBCB(),
+      fetchSerieBCBGenerica(433, "IPCA"),
+      fetchSerieBCBGenerica(188, "INPC"),
+      fetchSerieBCBGenerica(4391, "CDI"),
+      fetchSerieBCBGenerica(4390, "SELIC"),
+      fetchSerieBCBGenerica(226, "TR"),
+    ])
 
-  if (igpmResult.status === "fulfilled" && igpmResult.value.length > 0) {
-    results["IGP-M"] = igpmResult.value
-    results.successCount++
-    console.log(`[SUCCESS] IGP-M: ${igpmResult.value.length} registros obtidos`)
-  } else {
-    console.warn(`[WARNING] IGP-M: Falha ao obter dados`)
-  }
+  const indexMapping: [PromiseSettledResult<IndiceData[]>, string][] = [
+    [igpmResult, "IGP-M"],
+    [poupancaResult, "Poupança"],
+    [ipcaResult, "IPCA"],
+    [inpcResult, "INPC"],
+    [cdiResult, "CDI"],
+    [selicResult, "SELIC"],
+    [trResult, "TR"],
+  ]
 
-  if (poupancaResult.status === "fulfilled" && poupancaResult.value.length > 0) {
-    results["Poupança"] = poupancaResult.value
-    results.successCount++
-    console.log(`[SUCCESS] Poupança: ${poupancaResult.value.length} registros obtidos`)
-  } else {
-    console.warn(`[WARNING] Poupança: Falha ao obter dados`)
-  }
-
-  if (ipcaResult.status === "fulfilled" && ipcaResult.value.length > 0) {
-    results["IPCA"] = ipcaResult.value
-    results.successCount++
-    console.log(`[SUCCESS] IPCA: ${ipcaResult.value.length} registros obtidos`)
-  } else {
-    console.warn(`[WARNING] IPCA: Falha ao obter dados`)
-  }
-
-  if (inpcResult.status === "fulfilled" && inpcResult.value.length > 0) {
-    results["INPC"] = inpcResult.value
-    results.successCount++
-    console.log(`[SUCCESS] INPC: ${inpcResult.value.length} registros obtidos`)
-  } else {
-    console.warn(`[WARNING] INPC: Falha ao obter dados`)
+  for (const [result, name] of indexMapping) {
+    if (result.status === "fulfilled" && result.value.length > 0) {
+      (results as any)[name] = result.value
+      results.successCount++
+      console.log(`[SUCCESS] ${name}: ${result.value.length} registros obtidos`)
+    } else {
+      console.warn(`[WARNING] ${name}: Falha ao obter dados`)
+    }
   }
 
   return results
@@ -371,6 +369,21 @@ export async function atualizarIndicesNoCache(): Promise<boolean> {
     if (indicesObtidos["INPC"].length > 0) {
       localStorage.setItem("indices_INPC", JSON.stringify(indicesObtidos["INPC"]))
       console.log(`[CACHE] ✓ INPC: ${indicesObtidos["INPC"].length} registros salvos no cache`)
+    }
+
+    if (indicesObtidos["CDI"].length > 0) {
+      localStorage.setItem("indices_CDI", JSON.stringify(indicesObtidos["CDI"]))
+      console.log(`[CACHE] ✓ CDI: ${indicesObtidos["CDI"].length} registros salvos no cache`)
+    }
+
+    if (indicesObtidos["SELIC"].length > 0) {
+      localStorage.setItem("indices_SELIC", JSON.stringify(indicesObtidos["SELIC"]))
+      console.log(`[CACHE] ✓ SELIC: ${indicesObtidos["SELIC"].length} registros salvos no cache`)
+    }
+
+    if (indicesObtidos["TR"].length > 0) {
+      localStorage.setItem("indices_TR", JSON.stringify(indicesObtidos["TR"]))
+      console.log(`[CACHE] ✓ TR: ${indicesObtidos["TR"].length} registros salvos no cache`)
     }
 
     // Salvar timestamp da última atualização

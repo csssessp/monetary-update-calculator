@@ -766,25 +766,22 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   } else {
     memoriaCalculo.push(`=== DETALHAMENTO DOS ÍNDICES APLICADOS ===`)
     memoriaCalculo.push(``)
-    memoriaCalculo.push(`| # | Período | Taxa (%) | Fator Mensal | Acumulado |`)
-    memoriaCalculo.push(`|---|---------|----------|--------------|-----------|`)
+    memoriaCalculo.push(`| # | Período | Taxa (%) | Fator Mensal | Fator Acumulado | Valor Acumulado (R$) |`)
+    memoriaCalculo.push(`|---|---------|----------|--------------|-----------------|---------------------|`)
 
-    // Aplicar índices em formato de tabela
+    const mesesNomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+
     indicesDBPeriodo.forEach((indice, index) => {
-      const contadorParcelas = index + 1
-      const mesNome = [
-        "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
-        "Jul", "Ago", "Set", "Out", "Nov", "Dez"
-      ][indice.mes - 1]
-      
+      const mesNome = mesesNomes[indice.mes - 1]
       const fatorMensal = 1 + indice.valor / 100
       fatorCorrecao *= fatorMensal
-      
+      const valorAcum = parametros.valorOriginal * fatorCorrecao
+
       memoriaCalculo.push(
-        `| ${String(contadorParcelas).padStart(2, " ")} | ${mesNome}/${indice.ano} | ${indice.valor.toFixed(4).replace(".", ",")} | ${fatorMensal.toFixed(10)} | ${((fatorCorrecao - 1) * 100).toFixed(6)} |`
+        `| ${String(index + 1).padStart(2, " ")} | ${mesNome}/${indice.ano} | ${indice.valor.toFixed(4).replace(".", ",")} | ${fatorMensal.toFixed(8)} | ${fatorCorrecao.toFixed(8)} | R$ ${valorAcum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`
       )
     })
-    
+
     memoriaCalculo.push(``)
     memoriaCalculo.push(`Total de meses com índices aplicados: ${indicesDBPeriodo.length}`)
   }
@@ -894,32 +891,51 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   memoriaCalculo.push(`Honorários: R$ ${honorarios.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`)
   memoriaCalculo.push(`VALOR TOTAL: R$ ${valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 
-  // Fontes
-  const fontes =
-    nomeIndice === "IGP-M"
-      ? [
-          "FGV – Portal IBRE: https://portalibre.fgv.br",
-          "FGV – Sala de Imprensa (releases mensais): https://portalibre.fgv.br/press-releases",
-          "Tabela histórica IGP-M – Brasil Indicadores: https://brasilindicadores.com.br/igpm/",
-          "Mobills – Tabela IGP-M: https://www.mobills.com.br/tabelas/igp-m/",
-          "Trading Economics (mensal): https://pt.tradingeconomics.com/brazil/igp-m-inflation-mom",
-        ]
-      : undefined
-
   memoriaCalculo.push(``)
   memoriaCalculo.push(`=== FONTES DOS DADOS ===`)
 
-  // Add source based on the index used
-  switch (parametros.indice.toLowerCase()) {
-    case "igpm":
-      memoriaCalculo.push(`IGP-M: Ipeadata`)
-      memoriaCalculo.push(`Série: IGP12_IGPMG12 (IGP-M Geral - % mensal)`)
-      memoriaCalculo.push(`https://ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='IGP12_IGPMG12')?$format=json`)
-      break
-    default:
-      memoriaCalculo.push(`${nomeIndice}: Ipeadata`)
-      break
+  const fontesPorIndice: Record<string, string[]> = {
+    "IGP-M": [
+      "IGP-M (Índice Geral de Preços - Mercado) — FGV/IBRE",
+      "Banco Central do Brasil — Série BCB 189",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados",
+      "Ipeadata — Série IGP12_IGPMG12",
+    ],
+    "IPCA": [
+      "IPCA (Índice Nacional de Preços ao Consumidor Amplo) — IBGE",
+      "Banco Central do Brasil — Série BCB 433",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados",
+      "Metodologia: Calculadora do Cidadão (BCB) — https://www.bcb.gov.br/calculadora",
+    ],
+    "INPC": [
+      "INPC (Índice Nacional de Preços ao Consumidor) — IBGE",
+      "Banco Central do Brasil — Série BCB 188",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.188/dados",
+    ],
+    "Poupança": [
+      "Poupança — remuneração mensal dos depósitos (TR + 0,5%/mês ou 70% SELIC)",
+      "Banco Central do Brasil — Série BCB 195",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.195/dados",
+    ],
+    "CDI": [
+      "CDI (Certificado de Depósito Interbancário) — taxa acumulada ao mês",
+      "Banco Central do Brasil — Série BCB 4391",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.4391/dados",
+    ],
+    "SELIC": [
+      "SELIC (Sistema Especial de Liquidação e de Custódia) — taxa efetiva acumulada ao mês",
+      "Banco Central do Brasil — Série BCB 4390",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.4390/dados",
+    ],
+    "TR": [
+      "TR (Taxa Referencial) — taxa mensal",
+      "Banco Central do Brasil — Série BCB 226",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.226/dados",
+    ],
   }
+
+  const fonteDoIndice = fontesPorIndice[nomeIndice] || [`${nomeIndice} — Banco Central do Brasil`]
+  fonteDoIndice.forEach((linha) => memoriaCalculo.push(linha))
 
   memoriaCalculo.push(``)
   memoriaCalculo.push(`Cálculo realizado em: ${new Date().toLocaleString("pt-BR")}`)
@@ -1324,7 +1340,7 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
     convencaoDia,
     detalhamentoIGPM,
     detalhamentoPoupanca,
-    fontes,
+    fontes: fonteDoIndice,
     parcelamento,
   }
 }
