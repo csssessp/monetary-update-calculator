@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Calculator, Database, AlertTriangle, Download, FileText, Clock } from "lucide-react"
+import { Calculator, AlertTriangle, Download, FileText, Clock } from "lucide-react"
 import {
   calcularCorrecaoMonetaria,
   validarDatas,
@@ -20,7 +20,6 @@ import {
 } from "@/lib/calculo-monetario"
 import { atualizarIndicesNoCache } from "@/lib/fetch-indices"
 import { useToast } from "@/components/ui/use-toast"
-import Link from "next/link"
 
 interface FormData {
   descricao: string
@@ -496,14 +495,6 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
             <p>• IPCA: IBGE</p>
           </div>
 
-          <div className="flex flex-col gap-3">
-            <Link href="/indices" className="w-full">
-              <Button variant="outline" className="w-full gap-2 bg-blue-50 border-blue-200 hover:bg-blue-100">
-                <Database className="h-4 w-4" />
-                Visualizar e Editar Índices
-              </Button>
-            </Link>
-          </div>
         </div>
 
         <Card className="mb-6">

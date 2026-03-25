@@ -7,7 +7,7 @@ import { IndiceData } from "./indices-data"
 async function fetchIGPMFromIpeadata(): Promise<IndiceData[]> {
   try {
     const url = "https://ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='IGP12_IGPMG12')?$format=json"
-    const response = await fetch(url, { cache: "no-store", timeout: 10000 })
+    const response = await fetch(url, { cache: "no-store" })
 
     if (!response.ok) {
       console.warn(`Ipeadata API returned ${response.status}`)

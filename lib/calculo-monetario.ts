@@ -606,10 +606,6 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   const nomeIndice = getIndiceNome(parametros.indice)
   console.log("[CALCULO] Nome do índice:", nomeIndice)
 
-  // REGRA OBRIGATÓRIA: Valor das parcelas permanece fixo durante cada ciclo de 12 parcelas
-  // e é reajustado exclusivamente pelo IGP-M/FGV somente ao final de cada período de 12 parcelas
-  const aplicarCiclosParcelasIGPM = true // Ativar regra de 12 parcelas
-
   memoriaCalculo.push(`=== CÁLCULO DE CORREÇÃO MONETÁRIA ===`)
   memoriaCalculo.push(
     `Valor original: R$ ${parametros.valorOriginal.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
@@ -672,119 +668,71 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   const periodo = calcularDiferencaData(parametros.dataInicial, parametros.dataFinal)
   memoriaCalculo.push(`Período: ${periodo.meses} meses e ${periodo.dias} dias`)
 
-  // Obter índices do período principal
-  let indicesDBPeriodo = await obterIndicesPeriodo(parametros.dataInicial, parametros.dataFinal, parametros.indice)
-  
-  // Obter índices IGP-M do período (para reajuste a cada 12 meses)
-  let indicesIGPMPeriodo = await obterIndicesPeriodo(parametros.dataInicial, parametros.dataFinal, "IGP-M")
-  
-  // APLICAR REGRA: Reajuste pelo IGP-M a cada 12 meses (para TODOS os índices, inclusive Poupança)
-  const temReajusteIGPM = aplicarCiclosParcelasIGPM && indicesDBPeriodo.length > 12
-  
-  if (temReajusteIGPM && nomeIndice !== "IGP-M") {
-    // Se não for IGP-M, aplicar reajuste IGP-M a cada 12 meses SOBRE O ÍNDICE ESCOLHIDO
-    indicesDBPeriodo = aplicarReajusteIGPMACada12Meses(indicesDBPeriodo, indicesIGPMPeriodo)
-  } else if (temReajusteIGPM && nomeIndice === "IGP-M") {
-    // Se for IGP-M, aplicar ciclos de valor fixo
-    indicesDBPeriodo = aplicarCicloParcelasIGPM(indicesDBPeriodo)
-    
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`=== REGRA DE REAJUSTE A CADA 12 MESES (IGP-M) ===`)
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`De acordo com a Fundação Getúlio Vargas (FGV):`)
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`1. O valor das parcelas permanece FIXO durante cada ciclo de 12 meses`)
-    memoriaCalculo.push(`2. A cada 12 meses, é aplicado o REAJUSTE pelo IGP-M acumulado`)
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`3. Fórmula de cálculo do IGP-M acumulado dos 12 meses:`)
-    memoriaCalculo.push(`   IGP-M acumulado = (1 + m1) × (1 + m2) × ... × (1 + m12) − 1`)
-    memoriaCalculo.push(`   Onde m1 até m12 são os índices mensais em formato decimal (ex: 0.85 para 0.85%)`)
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`4. Este reajuste é aplicado no PRIMEIRO MÊS de cada novo ciclo`)
-    memoriaCalculo.push(`5. Os meses 2 a 12 de cada ciclo NÃO VARIAM (valor fixo)`)
-    memoriaCalculo.push(``)
-  }
+// Obter índices do período — Metodologia BCB Calculadora do Cidadão
+  // Fórmula: fator = ∏(1 + taxa_i / 100) para cada mês do período
+  const indicesDBPeriodo = await obterIndicesPeriodo(parametros.dataInicial, parametros.dataFinal, parametros.indice)
 
+  // Cálculo do fator e memorial em passo único — consistência total entre exibição e resultado
   let fatorCorrecao = 1
+  const detalhamentoIGPM: DetalheLinha[] = []
+  let contadorMesesComDado = 0
+  const mesesNomes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+
   memoriaCalculo.push(``)
+  memoriaCalculo.push(`=== DETALHAMENTO MÊS A MÊS — ${nomeIndice} (Metodologia: BCB Calculadora do Cidadão) ===${""}`)
 
-  memoriaCalculo.push(`=== APLICAÇÃO DOS ÍNDICES ${nomeIndice.toUpperCase()} (MENSAIS) ===`)
+  if (indicesDBPeriodo.length === 0) {
+    memoriaCalculo.push(`Nenhum índice encontrado para o período informado.`)
+    memoriaCalculo.push(`Verifique se o índice ${nomeIndice} possui dados para este período ou clique em "Atualizar do BCB".`)
+  } else {
+    memoriaCalculo.push(``)
+    memoriaCalculo.push(`| # | Período | ${nomeIndice} (%) | Fator Mensal | Fator Acumulado | Valor Acumulado (R$) |`)
+    memoriaCalculo.push(`|---|---------|${"−".repeat(Math.max(nomeIndice.length + 6, 14))}|--------------|-----------------|---------------------|`)
 
-  // Transparência – montar linhas completas com "pendente" quando faltarem dados
-  let detalhamentoIGPM: DetalheLinha[] | undefined
-
-  detalhamentoIGPM = []
-  let mesEsperado = parametros.dataInicial.dia === 1 ? parametros.dataInicial.mes : parametros.dataInicial.mes + 1
-  let anoEsperado = parametros.dataInicial.ano
-  if (mesEsperado > 12) {
-    mesEsperado = 1
-    anoEsperado++
-  }
-
-  const existe = (m: number, a: number) => indicesDBPeriodo.find((x) => x.mes === m && x.ano === a)
-
-  let fatorAcum = 1
-  while (
-    anoEsperado < parametros.dataFinal.ano ||
-    (anoEsperado === parametros.dataFinal.ano && mesEsperado <= parametros.dataFinal.mes)
-  ) {
-    const row = existe(mesEsperado, anoEsperado)
-    if (row) {
-      const fatorMensal = 1 + row.valor / 100
-      fatorAcum *= fatorMensal
-      detalhamentoIGPM.push({
-        mes: mesEsperado,
-        ano: anoEsperado,
-        pendente: false,
-        percentual: row.valor,
-        fatorMensal,
-        fatorAcumulado: fatorAcum,
-        valorAcumulado: parametros.valorOriginal * fatorAcum,
-      })
-    } else {
-      detalhamentoIGPM.push({
-        mes: mesEsperado,
-        ano: anoEsperado,
-        pendente: true,
-        fatorAcumulado: fatorAcum,
-        valorAcumulado: parametros.valorOriginal * fatorAcum,
-      })
+    let mesIt = parametros.dataInicial.mes
+    let anoIt = parametros.dataInicial.ano
+    while (anoIt < parametros.dataFinal.ano || (anoIt === parametros.dataFinal.ano && mesIt <= parametros.dataFinal.mes)) {
+      const indiceDoMes = indicesDBPeriodo.find((x) => x.mes === mesIt && x.ano === anoIt)
+      if (indiceDoMes) {
+        contadorMesesComDado++
+        const fatorMensal = 1 + indiceDoMes.valor / 100
+        fatorCorrecao *= fatorMensal
+        const valorAcum = parametros.valorOriginal * fatorCorrecao
+        detalhamentoIGPM.push({
+          mes: mesIt,
+          ano: anoIt,
+          pendente: false,
+          percentual: indiceDoMes.valor,
+          fatorMensal,
+          fatorAcumulado: fatorCorrecao,
+          valorAcumulado: valorAcum,
+        })
+        memoriaCalculo.push(
+          `| ${String(contadorMesesComDado).padStart(2, " ")} | ${mesesNomes[mesIt - 1]}/${anoIt} | ${indiceDoMes.valor.toFixed(4).replace(".", ",")} | ${fatorMensal.toFixed(8)} | ${fatorCorrecao.toFixed(8)} | R$ ${valorAcum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`
+        )
+      } else {
+        detalhamentoIGPM.push({
+          mes: mesIt,
+          ano: anoIt,
+          pendente: true,
+          fatorAcumulado: fatorCorrecao,
+          valorAcumulado: parametros.valorOriginal * fatorCorrecao,
+        })
+        memoriaCalculo.push(
+          `|  — | ${mesesNomes[mesIt - 1]}/${anoIt} | ⚠ não disponível | — | ${fatorCorrecao.toFixed(8)} | — |`
+        )
+      }
+      mesIt++
+      if (mesIt > 12) { mesIt = 1; anoIt++ }
     }
-    mesEsperado++
-    if (mesEsperado > 12) {
-      mesEsperado = 1
-      anoEsperado++
+    memoriaCalculo.push(``)
+    memoriaCalculo.push(`Meses com índices aplicados: ${contadorMesesComDado} de ${detalhamentoIGPM.length} esperados no período`)
+    if (contadorMesesComDado < detalhamentoIGPM.length) {
+      memoriaCalculo.push(`⚠ ATENÇÃO: ${detalhamentoIGPM.length - contadorMesesComDado} mês(es) sem dado — clique em "Atualizar do BCB" para buscar os dados mais recentes.`)
     }
   }
 
   let detalhamentoPoupanca: DetalheLinha[] | undefined = undefined
-
-  // Aplicação efetiva dos índices (sem arredondamentos intermediários)
-  if (indicesDBPeriodo.length === 0) {
-    memoriaCalculo.push(`Nenhum índice encontrado para o período informado.`)
-    fatorCorrecao = 1
-  } else {
-    memoriaCalculo.push(`=== DETALHAMENTO DOS ÍNDICES APLICADOS ===`)
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`| # | Período | Taxa (%) | Fator Mensal | Fator Acumulado | Valor Acumulado (R$) |`)
-    memoriaCalculo.push(`|---|---------|----------|--------------|-----------------|---------------------|`)
-
-    const mesesNomes = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
-
-    indicesDBPeriodo.forEach((indice, index) => {
-      const mesNome = mesesNomes[indice.mes - 1]
-      const fatorMensal = 1 + indice.valor / 100
-      fatorCorrecao *= fatorMensal
-      const valorAcum = parametros.valorOriginal * fatorCorrecao
-
-      memoriaCalculo.push(
-        `| ${String(index + 1).padStart(2, " ")} | ${mesNome}/${indice.ano} | ${indice.valor.toFixed(4).replace(".", ",")} | ${fatorMensal.toFixed(8)} | ${fatorCorrecao.toFixed(8)} | R$ ${valorAcum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`
-      )
-    })
-
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`Total de meses com índices aplicados: ${indicesDBPeriodo.length}`)
-  }
 
   memoriaCalculo.push(``)
   memoriaCalculo.push(`Fator de correção total: ${fatorCorrecao}`)
