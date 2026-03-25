@@ -39,6 +39,7 @@ interface FormData {
   apresentarMemoria: boolean
   mostrarTransparencia: boolean
   numeroParcelas: string
+  reajustarParcelasComIPCA: boolean
 }
 
 export default function CalculadoraAtualizacaoMonetaria() {
@@ -61,6 +62,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
     apresentarMemoria: false,
     mostrarTransparencia: false,
     numeroParcelas: "",
+    reajustarParcelasComIPCA: false,
   })
 
   const [resultado, setResultado] = useState<ResultadoCalculo | null>(null)
@@ -210,6 +212,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
         : undefined,
       multaSobreJuros: formData.multaSobreJuros,
       numeroParcelas: formData.numeroParcelas ? Number.parseInt(formData.numeroParcelas) : undefined,
+      reajustarParcelasComIPCA: formData.reajustarParcelasComIPCA,
     }
 
     try {
@@ -248,6 +251,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
       apresentarMemoria: false,
       mostrarTransparencia: false,
       numeroParcelas: "",
+      reajustarParcelasComIPCA: false,
     })
     setResultado(null)
     setErros([])
@@ -858,22 +862,38 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
               </h3>
               <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
                 <p className="text-sm text-gray-600 mb-3">
-                  Divida o valor total em parcelas. Para calcular com parcelamento, informe o número de parcelas antes de calcular:
+                  Divida o valor total corrigido em parcelas. A cada 12 meses, é possível aplicar o IPCA acumulado do período sobre as parcelas:
                 </p>
-                <div className="max-w-xs">
-                  <Label htmlFor="numeroParcelas" className="text-sm font-medium mb-2 block">
-                    Número de Parcelas
-                  </Label>
-                  <Input
-                    id="numeroParcelas"
-                    type="number"
-                    min="1"
-                    max="360"
-                    placeholder="Ex: 12, 24, 36... (deixe vazio para não parcelar)"
-                    value={formData.numeroParcelas || ""}
-                    onChange={(e) => handleInputChange("numeroParcelas", e.target.value)}
-                    className="w-full"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="numeroParcelas" className="text-sm font-medium mb-2 block">
+                      Número de Parcelas
+                    </Label>
+                    <Input
+                      id="numeroParcelas"
+                      type="number"
+                      min="1"
+                      max="360"
+                      placeholder="Ex: 12, 24, 36... (vazio = sem parcelamento)"
+                      value={formData.numeroParcelas || ""}
+                      onChange={(e) => handleInputChange("numeroParcelas", e.target.value)}
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 mt-6 sm:mt-0 sm:pt-6">
+                    <Checkbox
+                      id="reajustarParcelasComIPCA"
+                      checked={formData.reajustarParcelasComIPCA}
+                      disabled={!formData.numeroParcelas || Number(formData.numeroParcelas) <= 12}
+                      onCheckedChange={(checked) => handleInputChange("reajustarParcelasComIPCA", checked as boolean)}
+                    />
+                    <Label htmlFor="reajustarParcelasComIPCA" className="text-sm cursor-pointer">
+                      Reajustar com IPCA a cada 12 meses
+                      {(!formData.numeroParcelas || Number(formData.numeroParcelas) <= 12) && (
+                        <span className="block text-xs text-gray-400">(requer mais de 12 parcelas)</span>
+                      )}
+                    </Label>
+                  </div>
                 </div>
               </div>
             </div>
