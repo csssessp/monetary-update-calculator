@@ -408,45 +408,45 @@ export const indicesData = {
     { mes: 10, ano: 2019, valor: 0.68 },
     { mes: 11, ano: 2019, valor: 0.3 },
     { mes: 12, ano: 2019, valor: 2.09 },
-    // 2020
-    { mes: 1, ano: 2020, valor: 0.2588 },
-    { mes: 2, ano: 2020, valor: 0.2588 },
-    { mes: 3, ano: 2020, valor: 0.2446 },
-    { mes: 4, ano: 2020, valor: 0.2162 },
-    { mes: 5, ano: 2020, valor: 0.2162 },
-    { mes: 6, ano: 2020, valor: 0.1733 },
-    { mes: 7, ano: 2020, valor: 0.1303 },
-    { mes: 8, ano: 2020, valor: 0.1303 },
-    { mes: 9, ano: 2020, valor: 0.1159 },
-    { mes: 10, ano: 2020, valor: 0.1159 },
-    { mes: 11, ano: 2020, valor: 0.1159 },
-    { mes: 12, ano: 2020, valor: 0.1159 },
-    // 2021
-    { mes: 1, ano: 2021, valor: 0.1159 },
-    { mes: 2, ano: 2021, valor: 0.1159 },
-    { mes: 3, ano: 2021, valor: 0.1159 },
-    { mes: 4, ano: 2021, valor: 0.159 },
-    { mes: 5, ano: 2021, valor: 0.159 },
-    { mes: 6, ano: 2021, valor: 0.2019 },
-    { mes: 7, ano: 2021, valor: 0.2446 },
-    { mes: 8, ano: 2021, valor: 0.2446 },
-    { mes: 9, ano: 2021, valor: 0.3012 },
-    { mes: 10, ano: 2021, valor: 0.3575 },
-    { mes: 11, ano: 2021, valor: 0.4412 },
-    { mes: 12, ano: 2021, valor: 0.4902 },
-    // 2022
-    { mes: 1, ano: 2022, valor: 0.5608 },
-    { mes: 2, ano: 2022, valor: 0.5 },
-    { mes: 3, ano: 2022, valor: 0.5976 },
-    { mes: 4, ano: 2022, valor: 0.5558 },
-    { mes: 5, ano: 2022, valor: 0.6671 },
-    { mes: 6, ano: 2022, valor: 0.6491 },
-    { mes: 7, ano: 2022, valor: 0.6639 },
-    { mes: 8, ano: 2022, valor: 0.7421 },
-    { mes: 9, ano: 2022, valor: 0.6814 },
-    { mes: 10, ano: 2022, valor: 0.6501 },
-    { mes: 11, ano: 2022, valor: 0.6515 },
-    { mes: 12, ano: 2022, valor: 0.7082 },
+    // 2020 — IGP-M (FGV) correto
+    { mes: 1, ano: 2020, valor: 0.24 },
+    { mes: 2, ano: 2020, valor: 0.18 },
+    { mes: 3, ano: 2020, valor: 1.71 },
+    { mes: 4, ano: 2020, valor: 0.80 },
+    { mes: 5, ano: 2020, valor: 0.37 },
+    { mes: 6, ano: 2020, valor: 1.55 },
+    { mes: 7, ano: 2020, valor: 2.23 },
+    { mes: 8, ano: 2020, valor: 2.74 },
+    { mes: 9, ano: 2020, valor: 4.34 },
+    { mes: 10, ano: 2020, valor: 3.23 },
+    { mes: 11, ano: 2020, valor: 3.28 },
+    { mes: 12, ano: 2020, valor: 2.02 },
+    // 2021 — IGP-M (FGV) correto
+    { mes: 1, ano: 2021, valor: 2.58 },
+    { mes: 2, ano: 2021, valor: 2.53 },
+    { mes: 3, ano: 2021, valor: 3.09 },
+    { mes: 4, ano: 2021, valor: 1.70 },
+    { mes: 5, ano: 2021, valor: 4.10 },
+    { mes: 6, ano: 2021, valor: 0.60 },
+    { mes: 7, ano: 2021, valor: 0.78 },
+    { mes: 8, ano: 2021, valor: 0.66 },
+    { mes: 9, ano: 2021, valor: -0.64 },
+    { mes: 10, ano: 2021, valor: 0.64 },
+    { mes: 11, ano: 2021, valor: -0.98 },
+    { mes: 12, ano: 2021, valor: 0.87 },
+    // 2022 — IGP-M (FGV) correto
+    { mes: 1, ano: 2022, valor: 1.82 },
+    { mes: 2, ano: 2022, valor: 1.83 },
+    { mes: 3, ano: 2022, valor: 1.74 },
+    { mes: 4, ano: 2022, valor: 1.41 },
+    { mes: 5, ano: 2022, valor: 0.52 },
+    { mes: 6, ano: 2022, valor: 0.20 },
+    { mes: 7, ano: 2022, valor: -0.86 },
+    { mes: 8, ano: 2022, valor: -0.70 },
+    { mes: 9, ano: 2022, valor: -0.95 },
+    { mes: 10, ano: 2022, valor: -0.97 },
+    { mes: 11, ano: 2022, valor: -0.56 },
+    { mes: 12, ano: 2022, valor: 0.56 },
     // 2023
     { mes: 1, ano: 2023, valor: 0.21 },
     { mes: 2, ano: 2023, valor: -0.06 },
@@ -1698,17 +1698,17 @@ export const indicesData = {
     { mes: 10, ano: 2016, valor: 0.6609 },
     { mes: 11, ano: 2016, valor: 0.6435 },
     { mes: 12, ano: 2016, valor: 0.6858 },
-    // 2017
+    // 2017 — Poupança: regra antiga (0,5% + TR) até set/2017; nova regra (70% SELIC/12) a partir de out/2017
     { mes: 1, ano: 2017, valor: 0.6709 },
-    { mes: 2, ano: 2017, valor: 0.5304 },
-    { mes: 3, ano: 2017, valor: 0.6527 },
-    { mes: 4, ano: 2017, valor: 0.5 },
-    { mes: 5, ano: 2017, valor: 0.5768 },
-    { mes: 6, ano: 2017, valor: 0.5539 },
-    { mes: 7, ano: 2017, valor: 0.5626 },
-    { mes: 8, ano: 2017, valor: 0.5512 },
-    { mes: 9, ano: 2017, valor: 0.5 },
-    { mes: 10, ano: 2017, valor: 0.469 },
+    { mes: 2, ano: 2017, valor: 0.5425 },
+    { mes: 3, ano: 2017, valor: 0.5705 },
+    { mes: 4, ano: 2017, valor: 0.5253 },
+    { mes: 5, ano: 2017, valor: 0.5814 },
+    { mes: 6, ano: 2017, valor: 0.5857 },
+    { mes: 7, ano: 2017, valor: 0.5316 },
+    { mes: 8, ano: 2017, valor: 0.5040 },
+    { mes: 9, ano: 2017, valor: 0.5000 },
+    { mes: 10, ano: 2017, valor: 0.4690 },
     { mes: 11, ano: 2017, valor: 0.4273 },
     { mes: 12, ano: 2017, valor: 0.4273 },
     // 2018
@@ -2493,9 +2493,19 @@ export async function obterIndicesAtualizados(
       if (stored) {
         const dadosBCB: IndiceData[] = JSON.parse(stored)
         if (Array.isArray(dadosBCB)) {
+          // Dados do BCB só sobrescrevem dados locais para meses recentes (últimos 24 meses).
+          // Para dados históricos, os valores hardcoded locais são mais confiáveis — isso evita
+          // que a Série 195 do BCB (regra antiga da poupança, ~0,5% fixo) sobrescreva os valores
+          // corretos da nova regra (70% SELIC/12 quando SELIC ≤ 8,5% a.a.).
+          const hoje = new Date()
+          let cutoffMonth = hoje.getMonth() + 1 - 24
+          let cutoffYear = hoje.getFullYear()
+          if (cutoffMonth <= 0) {
+            cutoffMonth += 12
+            cutoffYear -= 1
+          }
           dadosBCB.forEach((d) => {
             if (d && typeof d.mes === "number" && typeof d.ano === "number" && typeof d.valor === "number") {
-              // Dados do BCB sobrescrevem locais (são mais recentes/precisos)
               const key = `${d.ano}-${d.mes}`
               // Aplicar filtro de data
               if (startMonth !== undefined && startYear !== undefined) {
@@ -2504,6 +2514,10 @@ export async function obterIndicesAtualizados(
               if (endMonth !== undefined && endYear !== undefined) {
                 if (d.ano > endYear || (d.ano === endYear && d.mes > endMonth)) return
               }
+              // Proteger dados históricos: só sobrescreve se o mês for recente (≤ 24 meses atrás)
+              // ou se não existir dado local para aquele mês
+              const isHistorico = d.ano < cutoffYear || (d.ano === cutoffYear && d.mes < cutoffMonth)
+              if (isHistorico && mapa.has(key)) return
               mapa.set(key, d)
             }
           })
