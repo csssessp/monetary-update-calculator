@@ -2490,6 +2490,13 @@ export async function obterIndicesAtualizados(
 
   if (typeof window !== "undefined") {
     try {
+      // Poupança: o cache BCB (série 195) retorna valores diários que divergem dos
+      // índices mensais publicados. Garantir que o cache seja sempre removido para
+      // que os dados estáticos verificados (debit.com.br) sejam a única fonte.
+      if (nomeCurto === "Poupança") {
+        localStorage.removeItem("indices_Poupança")
+      }
+
       const chave = `indices_${nomeCurto}`
       const stored = localStorage.getItem(chave)
       if (stored) {
