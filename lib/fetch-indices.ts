@@ -295,10 +295,12 @@ export async function fetchAllIndices(): Promise<{
   }
 
   // Fetch todos os índices em paralelo
-  const [igpmResult, poupancaResult, ipcaResult, inpcResult, cdiResult, selicResult, trResult] =
+  // Poupança NÃO é buscada do BCB pois a série 195 retorna valores diários que divergem
+  // dos índices mensais publicados (debit.com.br). Os dados da Poupança são mantidos
+  // manualmente nos dados estáticos em lib/indices-data.ts.
+  const [igpmResult, ipcaResult, inpcResult, cdiResult, selicResult, trResult] =
     await Promise.allSettled([
       fetchIGPMFromBCB(),
-      fetchPoupancaFromBCB(),
       fetchSerieBCBGenerica(433, "IPCA"),
       fetchSerieBCBGenerica(188, "INPC"),
       fetchSerieBCBGenerica(4391, "CDI"),
@@ -308,7 +310,6 @@ export async function fetchAllIndices(): Promise<{
 
   const indexMapping: [PromiseSettledResult<IndiceData[]>, string][] = [
     [igpmResult, "IGP-M"],
-    [poupancaResult, "Poupança"],
     [ipcaResult, "IPCA"],
     [inpcResult, "INPC"],
     [cdiResult, "CDI"],
@@ -356,10 +357,9 @@ export async function atualizarIndicesNoCache(): Promise<boolean> {
       console.log(`[CACHE] ✓ IGP-M: ${indicesObtidos["IGP-M"].length} registros salvos no cache`)
     }
 
-    if (indicesObtidos["Poupança"].length > 0) {
-      localStorage.setItem("indices_Poupança", JSON.stringify(indicesObtidos["Poupança"]))
-      console.log(`[CACHE] ✓ Poupança: ${indicesObtidos["Poupança"].length} registros salvos no cache`)
-    }
+    // Poupança: remover cache BCB antigo para garantir uso dos dados estáticos corretos
+    localStorage.removeItem("indices_Poupança")
+    console.log("[CACHE] ✓ Poupança: cache BCB removido — usando dados estáticos verificados")
 
     if (indicesObtidos["IPCA"].length > 0) {
       localStorage.setItem("indices_IPCA", JSON.stringify(indicesObtidos["IPCA"]))
