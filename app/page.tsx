@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import * as XLSX from "xlsx"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -44,6 +44,19 @@ interface FormData {
 
 export default function CalculadoraAtualizacaoMonetaria() {
   const { toast } = useToast()
+
+  // Auto-atualizar índices da Poupança ao carregar (silencioso, sem intervenção do usuário)
+  useEffect(() => {
+    fetch("/api/poupanca-indices", { method: "POST" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.atualizado) {
+          console.log(`[Poupança] Auto-atualizado: ${d.mensagem}`)
+        }
+      })
+      .catch(() => { /* silencioso */ })
+  }, [])
+
   const [formData, setFormData] = useState<FormData>({
     descricao: "",
     valor: "",

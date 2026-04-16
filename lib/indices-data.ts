@@ -2482,49 +2482,56 @@ export async function obterIndicesAtualizados(
 
   // 1. Dados hardcoded locais (fallback confiável)
   const dadosLocais = filtrarLocal(nomeCurto, startMonth, startYear, endMonth, endYear)
-
-  // 2. Mesclar com dados atualizados do BCB salvos no localStorage
-  //    (populados por atualizarIndicesNoCache em fetch-indices.ts)
   const mapa = new Map<string, IndiceData>()
   dadosLocais.forEach((d) => mapa.set(`${d.ano}-${d.mes}`, d))
 
-  if (typeof window !== "undefined") {
+  // 2. Poupança: ler do arquivo JSON persistente via API (dados sempre verificados)
+  if (nomeCurto === "Poupança" && typeof window !== "undefined") {
     try {
-      // Poupança: o cache BCB (série 195) retorna valores diários que divergem dos
-      // índices mensais publicados. Garantir que o cache seja sempre removido para
-      // que os dados estáticos verificados (debit.com.br) sejam a única fonte.
-      if (nomeCurto === "Poupança") {
-        localStorage.removeItem("indices_Poupança")
+      const resp = await fetch("/api/poupanca-indices", { cache: "no-store" })
+      if (resp.ok) {
+        const json = await resp.json()
+        const entradas: IndiceData[] = Array.isArray(json.indices) ? json.indices : []
+        entradas.forEach((d) => {
+          if (typeof d.mes !== "number" || typeof d.ano !== "number" || typeof d.valor !== "number") return
+          if (startMonth !== undefined && startYear !== undefined) {
+            if (d.ano < startYear || (d.ano === startYear && d.mes < startMonth)) return
+          }
+          if (endMonth !== undefined && endYear !== undefined) {
+            if (d.ano > endYear || (d.ano === endYear && d.mes > endMonth)) return
+          }
+          mapa.set(`${d.ano}-${d.mes}`, d)
+        })
+        console.log(`✓ Poupança: ${entradas.length} registros carregados do arquivo JSON`)
       }
+    } catch (error) {
+      console.warn("Poupança: falha ao ler API, usando dados estáticos locais", error)
+    }
+    // Limpar qualquer cache BCB antigo que possa ter ficado
+    try { localStorage.removeItem("indices_Poupança") } catch { /* ignore */ }
+  }
 
+  // 3. Outros índices: mesclar com dados do localStorage (populados por atualizarIndicesNoCache)
+  if (nomeCurto !== "Poupança" && typeof window !== "undefined") {
+    try {
       const chave = `indices_${nomeCurto}`
       const stored = localStorage.getItem(chave)
       if (stored) {
         const dadosBCB: IndiceData[] = JSON.parse(stored)
         if (Array.isArray(dadosBCB)) {
-          // Dados do BCB só sobrescrevem dados locais para meses recentes (últimos 24 meses).
-          // Para dados históricos, os valores hardcoded locais são mais confiáveis — isso evita
-          // que a Série 195 do BCB (regra antiga da poupança, ~0,5% fixo) sobrescreva os valores
-          // corretos da nova regra (70% SELIC/12 quando SELIC ≤ 8,5% a.a.).
           const hoje = new Date()
           let cutoffMonth = hoje.getMonth() + 1 - 24
           let cutoffYear = hoje.getFullYear()
-          if (cutoffMonth <= 0) {
-            cutoffMonth += 12
-            cutoffYear -= 1
-          }
+          if (cutoffMonth <= 0) { cutoffMonth += 12; cutoffYear -= 1 }
           dadosBCB.forEach((d) => {
             if (d && typeof d.mes === "number" && typeof d.ano === "number" && typeof d.valor === "number") {
               const key = `${d.ano}-${d.mes}`
-              // Aplicar filtro de data
               if (startMonth !== undefined && startYear !== undefined) {
                 if (d.ano < startYear || (d.ano === startYear && d.mes < startMonth)) return
               }
               if (endMonth !== undefined && endYear !== undefined) {
                 if (d.ano > endYear || (d.ano === endYear && d.mes > endMonth)) return
               }
-              // Proteger dados históricos: só sobrescreve se o mês for recente (≤ 24 meses atrás)
-              // ou se não existir dado local para aquele mês
               const isHistorico = d.ano < cutoffYear || (d.ano === cutoffYear && d.mes < cutoffMonth)
               if (isHistorico && mapa.has(key)) return
               mapa.set(key, d)
