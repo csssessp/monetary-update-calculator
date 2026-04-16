@@ -1811,13 +1811,15 @@ export const indicesData = {
     { mes: 6, ano: 2025, valor: 0.6707 },
     { mes: 7, ano: 2025, valor: 0.6767 },
     { mes: 8, ano: 2025, valor: 0.6731 },
-    { mes: 9, ano: 2025, valor: 0.6558 },
-    { mes: 10, ano: 2025, valor: 0.6523 },
+    { mes: 9, ano: 2025, valor: 0.6751 },
+    { mes: 10, ano: 2025, valor: 0.6767 },
     { mes: 11, ano: 2025, valor: 0.6642 },
     { mes: 12, ano: 2025, valor: 0.6751 },
     // 2026
-    { mes: 1, ano: 2026, valor: 0.6707 },
-    { mes: 2, ano: 2026, valor: 0.6750 },
+    { mes: 1, ano: 2026, valor: 0.6727 },
+    { mes: 2, ano: 2026, valor: 0.6213 },
+    { mes: 3, ano: 2026, valor: 0.6744 },
+    { mes: 4, ano: 2026, valor: 0.6687 },
   ],
   CDI: [
     // ═══════════════════════════════════════════════════════════════════
