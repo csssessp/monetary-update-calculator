@@ -42,8 +42,8 @@ export const indicesData = {
     { mes: 8, ano: 1991, valor: 15.25 },
     { mes: 9, ano: 1991, valor: 14.93 },
     { mes: 10, ano: 1991, valor: 22.63 },
-    { mes: 11, ano: 2011, valor: 25.62 },
-    { mes: 12, ano: 2011, valor: 23.63 },
+    { mes: 11, ano: 1991, valor: 25.62 },
+    { mes: 12, ano: 1991, valor: 23.63 },
     // 1992
     { mes: 1, ano: 1992, valor: 23.56 },
     { mes: 2, ano: 1992, valor: 27.86 },
@@ -1820,6 +1820,8 @@ export const indicesData = {
     { mes: 2, ano: 2026, valor: 0.6213 },
     { mes: 3, ano: 2026, valor: 0.6744 },
     { mes: 4, ano: 2026, valor: 0.6687 },
+    { mes: 5, ano: 2026, valor: 0.6695 },
+    { mes: 6, ano: 2026, valor: 0.6718 },
   ],
   CDI: [
     // ═══════════════════════════════════════════════════════════════════

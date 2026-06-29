@@ -3,6 +3,7 @@ import path from "path"
 import fs from "fs"
 
 const DATA_FILE = path.join(process.cwd(), "data", "poupanca-indices.json")
+const HISTORICO_FILE = path.join(process.cwd(), "data", "indices-historico.txt")
 
 interface IndiceEntry {
   mes: number
@@ -63,7 +64,11 @@ async function buscarBCBSerie195(dataInicial: string, dataFinal: string): Promis
   const dados = await resp.json()
   if (!Array.isArray(dados)) return []
 
-  const resultado: IndiceEntry[] = []
+  // BCB Série 195 retorna uma entrada por DIA-ANIVERSÁRIO do mês.
+  // O valor correto é o do DIA 1 de cada mês (rate para depósitos com aniversário no dia 1),
+  // que é o mesmo valor usado pela Calculadora do Cidadão do BCB para correção monetária.
+  // Usamos "first-entry wins" por mês: a primeira entrada encontrada vence.
+  const mapaResult = new Map<string, IndiceEntry>()
   for (const item of dados) {
     if (!item.data || !item.valor) continue
     const partes = item.data.split("/")
@@ -71,9 +76,69 @@ async function buscarBCBSerie195(dataInicial: string, dataFinal: string): Promis
     const ano = parseInt(partes[2])
     const valor = parseFloat(String(item.valor).replace(",", "."))
     if (isNaN(mes) || isNaN(ano) || isNaN(valor) || valor <= 0) continue
-    resultado.push({ mes, ano, valor })
+    const key = `${ano}-${mes}`
+    if (!mapaResult.has(key)) {
+      mapaResult.set(key, { mes, ano, valor })
+    }
   }
-  return resultado
+  return Array.from(mapaResult.values())
+}
+
+const NOMES_MES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"]
+
+function atualizarHistoricoTxt(novosEntries: IndiceEntry[], periodoInicial: string): void {
+  try {
+    const hoje = new Date().toISOString().split("T")[0]
+    const mesesStr = novosEntries
+      .sort((a, b) => a.ano !== b.ano ? a.ano - b.ano : a.mes - b.mes)
+      .map((e) => {
+        const mm = String(e.mes).padStart(2, "0")
+        const nMes = NOMES_MES[e.mes - 1]
+        return `${e.ano}-${mm}   ${e.valor.toFixed(4)}  # ${nMes}/${e.ano} — adicionado em ${hoje} via BCB`
+      })
+      .join("\n")
+
+    const logEntry = `${hoje}   Atualização automática       ${novosEntries.map(e=>`${NOMES_MES[e.mes-1]}/${e.ano}`).join(", ")}   BCB Série 195\n`
+
+    let conteudo = ""
+    try { conteudo = fs.readFileSync(HISTORICO_FILE, "utf-8") } catch { return }
+
+    // Inserir novas linhas de dados antes da linha do LOG DE ATUALIZAÇÕES
+    const marcadorDados = "2026-06   0.6718"
+    const marcadorLog = "LOG DE ATUALIZAÇÕES"
+
+    if (conteudo.includes(marcadorLog)) {
+      // Adicionar novas linhas de dados logo antes do bloco de LOG
+      const partes = conteudo.split(/={3,}[\s\S]*?LOG DE ATUALIZAÇÕES[\s\S]*?={3,}\n/)
+      if (partes.length >= 2) {
+        // Encontrar posição do separador do LOG
+        const idxLog = conteudo.indexOf("=" .repeat(3))
+        const idxLogReal = conteudo.indexOf("LOG DE ATUALIZAÇÕES")
+        const idxSep = conteudo.lastIndexOf("=".repeat(10), idxLogReal)
+
+        const antes = conteudo.substring(0, idxSep).trimEnd()
+        const depois = conteudo.substring(idxSep)
+
+        // Encontrar última linha de dados e inserir após ela
+        const ultimaLinhaDados = marcadorDados
+        const posUltima = antes.lastIndexOf(ultimaLinhaDados)
+        if (posUltima >= 0) {
+          const fimUltima = antes.indexOf("\n", posUltima)
+          const novoConteudo =
+            antes.substring(0, fimUltima + 1) +
+            mesesStr + "\n" +
+            antes.substring(fimUltima + 1) + "\n" +
+            depois.replace(
+              /(----------   -------------------------   ---------------------   ---------------\n)/,
+              `$1${logEntry}`
+            )
+          fs.writeFileSync(HISTORICO_FILE, novoConteudo, "utf-8")
+        }
+      }
+    }
+  } catch {
+    // Falha silenciosa — o histórico é apenas um registro auxiliar
+  }
 }
 
 // GET — retorna o arquivo JSON com todos os índices
@@ -145,6 +210,11 @@ export async function POST() {
   }
 
   const salvo = salvarArquivo(dadosNovos)
+
+  // Atualizar arquivo histórico de texto com os novos meses
+  if (salvo) {
+    atualizarHistoricoTxt(novosEntries, dataInicial)
+  }
 
   return NextResponse.json({
     atualizado: true,

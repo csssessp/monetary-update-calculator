@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "lastUpdated": "2026-04-16T00:00:00.000Z",
+  "lastUpdated": "2026-06-29T00:00:00.000Z",
   "fonte": "BCB Série 195 + debit.com.br (verificado)",
   "indices": [
     {"mes": 8, "ano": 1986, "valor": 2.9},
@@ -479,6 +479,8 @@
     {"mes": 1, "ano": 2026, "valor": 0.6727},
     {"mes": 2, "ano": 2026, "valor": 0.6213},
     {"mes": 3, "ano": 2026, "valor": 0.6744},
-    {"mes": 4, "ano": 2026, "valor": 0.6687}
+    {"mes": 4, "ano": 2026, "valor": 0.6687},
+    {"mes": 5, "ano": 2026, "valor": 0.6695},
+    {"mes": 6, "ano": 2026, "valor": 0.6718}
   ]
 }
