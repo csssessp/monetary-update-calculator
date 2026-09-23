@@ -32,6 +32,16 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { obterIndicesAtualizados, getIndiceNome, type IndiceData } from "./indices-data"
+import {
+  obterSerieDiaria,
+  formatarData,
+  INICIO_REGRA_NOVA_POUPANCA,
+  SERIE_POUPANCA_NOVA,
+  SERIE_POUPANCA_ANTIGA,
+  SERIE_TR_DIARIA,
+  SERIE_SELIC_DIARIA,
+  SERIE_CDI_DIARIA,
+} from "./series-diarias"
 
 export interface DataCalculo {
   dia: number
@@ -547,7 +557,47 @@ function obterTaxaAnual(
   }
 }
 
-// Obter índices do período – regra especial para poupança (aniversários)
+// Meses cujo índice deve ser aplicado no período – regra especial para poupança (aniversários)
+export function mesesEsperadosPeriodo(
+  dataInicial: DataCalculo,
+  dataFinal: DataCalculo,
+  nomeIndice: string,
+): { mes: number; ano: number }[] {
+  const meses: { mes: number; ano: number }[] = []
+
+  if (getIndiceNome(nomeIndice) === "Poupança") {
+    let dataAtual = new Date(dataInicial.ano, dataInicial.mes - 1, dataInicial.dia)
+    const dataFim = new Date(dataFinal.ano, dataFinal.mes - 1, dataFinal.dia)
+
+    while (dataAtual < dataFim) {
+      const proximoAniversario = new Date(dataAtual)
+      proximoAniversario.setMonth(proximoAniversario.getMonth() + 1)
+
+      if (proximoAniversario <= dataFim) {
+        meses.push({ mes: proximoAniversario.getMonth() + 1, ano: proximoAniversario.getFullYear() })
+      }
+      dataAtual = proximoAniversario
+    }
+  } else {
+    // Para IGP-M: sempre começar no mês solicitado, independente do dia
+    // Se dataInicial.dia > 15, ainda contamos o mês inteiro
+    let mesAtual = dataInicial.mes
+    let anoAtual = dataInicial.ano
+
+    while (anoAtual < dataFinal.ano || (anoAtual === dataFinal.ano && mesAtual <= dataFinal.mes)) {
+      meses.push({ mes: mesAtual, ano: anoAtual })
+      mesAtual++
+      if (mesAtual > 12) {
+        mesAtual = 1
+        anoAtual++
+      }
+    }
+  }
+
+  return meses
+}
+
+// Obter índices do período (apenas os meses com dado disponível)
 export async function obterIndicesPeriodo(
   dataInicial: DataCalculo,
   dataFinal: DataCalculo,
@@ -562,42 +612,226 @@ export async function obterIndicesPeriodo(
   )
 
   const indicesPeriodo: IndiceData[] = []
-  const nomeCurtoIndice = getIndiceNome(nomeIndice)
-
-  if (nomeCurtoIndice === "Poupança") {
-    let dataAtual = new Date(dataInicial.ano, dataInicial.mes - 1, dataInicial.dia)
-    const dataFim = new Date(dataFinal.ano, dataFinal.mes - 1, dataFinal.dia)
-
-    while (dataAtual < dataFim) {
-      const proximoAniversario = new Date(dataAtual)
-      proximoAniversario.setMonth(proximoAniversario.getMonth() + 1)
-
-      if (proximoAniversario <= dataFim) {
-        const mesIndice = proximoAniversario.getMonth() + 1
-        const anoIndice = proximoAniversario.getFullYear()
-        const indiceDoMes = indices.find((i) => i.mes === mesIndice && i.ano === anoIndice)
-        if (indiceDoMes) indicesPeriodo.push(indiceDoMes)
-      }
-      dataAtual = proximoAniversario
-    }
-  } else {
-    // Para IGP-M: sempre começar no mês solicitado, independente do dia
-    // Se dataInicial.dia > 15, ainda contamos o mês inteiro
-    let mesAtual = dataInicial.mes
-    let anoAtual = dataInicial.ano
-
-    while (anoAtual < dataFinal.ano || (anoAtual === dataFinal.ano && mesAtual <= dataFinal.mes)) {
-      const indiceDoMes = indices.find((i) => i.mes === mesAtual && i.ano === anoAtual)
-      if (indiceDoMes) indicesPeriodo.push(indiceDoMes)
-      mesAtual++
-      if (mesAtual > 12) {
-        mesAtual = 1
-        anoAtual++
-      }
-    }
+  for (const { mes, ano } of mesesEsperadosPeriodo(dataInicial, dataFinal, nomeIndice)) {
+    const indiceDoMes = indices.find((i) => i.mes === mes && i.ano === ano)
+    if (indiceDoMes) indicesPeriodo.push(indiceDoMes)
   }
 
   return indicesPeriodo
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FATOR DE CORREÇÃO DO PERÍODO — metodologia da Calculadora do Cidadão (BCB)
+// ═══════════════════════════════════════════════════════════════════════════════
+//  • IGP-M, IPCA, INPC ("mensal"): ∏(1 + taxa_mês/100) do mês inicial ao mês final, inclusive
+//  • Poupança, TR ("aniversário"): períodos DD/MM → DD/MM+1 a partir da data inicial;
+//    cada período usa a taxa da série diária na data de início do período
+//    (dias 29, 30 e 31 passam para o dia 01 do mês seguinte).
+//    Poupança: série 195 (depósitos a partir de 04/05/2012) ou 25 (regra antiga). TR: série 226.
+//  • SELIC, CDI ("diária"): ∏(1 + taxa_dia/100) para cada dia útil em [data inicial, data final)
+//    Séries 11 (SELIC) e 12 (CDI).
+// Validado contra https://www3.bcb.gov.br/CALCIDADAO com precisão de 8 casas decimais.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type MetodologiaIndice = "mensal" | "aniversario" | "diaria"
+
+export function metodologiaDoIndice(nomeIndice: string): MetodologiaIndice {
+  const nome = getIndiceNome(nomeIndice)
+  if (nome === "Poupança" || nome === "TR") return "aniversario"
+  if (nome === "SELIC" || nome === "CDI") return "diaria"
+  return "mensal"
+}
+
+export interface FatorPeriodo {
+  fator: number // fator acumulado com base 1
+  linhas: DetalheLinha[] // valorAcumulado com base 1 (quem chama reescala)
+  rotulos: string[] // rótulo de cada linha para a memória de cálculo
+  aplicados: number
+  esperados: number
+  descricao: string[] // metodologia e fonte, para a memória de cálculo
+  avisos: string[] // aproximações ou dados faltantes
+}
+
+const NOMES_MES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+const paraDate = (d: DataCalculo) => new Date(d.ano, d.mes - 1, d.dia)
+const somarDias = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
+const fmtCurta = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`
+
+async function fatorMensal(di: DataCalculo, df: DataCalculo, indice: string): Promise<FatorPeriodo> {
+  const indices = await obterIndicesPeriodo(di, df, indice)
+  const r: FatorPeriodo = { fator: 1, linhas: [], rotulos: [], aplicados: 0, esperados: 0, descricao: [], avisos: [] }
+  r.descricao.push(`Metodologia: variação mensal, do mês inicial ao mês final (inclusive) — igual à Calculadora do Cidadão.`)
+  for (const { mes, ano } of mesesEsperadosPeriodo(di, df, indice)) {
+    r.esperados++
+    const dado = indices.find((x) => x.mes === mes && x.ano === ano)
+    if (dado) {
+      r.aplicados++
+      const fm = 1 + dado.valor / 100
+      r.fator *= fm
+      r.linhas.push({ mes, ano, pendente: false, percentual: dado.valor, fatorMensal: fm, fatorAcumulado: r.fator, valorAcumulado: r.fator })
+    } else {
+      r.linhas.push({ mes, ano, pendente: true, fatorAcumulado: r.fator, valorAcumulado: r.fator })
+    }
+    r.rotulos.push(`${NOMES_MES[mes - 1]}/${ano}`)
+  }
+  if (r.aplicados < r.esperados) {
+    r.avisos.push(`${r.esperados - r.aplicados} mês(es) sem índice publicado — o fator não inclui esses meses. Atualize os índices ou aguarde a divulgação oficial.`)
+  }
+  return r
+}
+
+async function fatorAniversario(di: DataCalculo, df: DataCalculo, indice: string): Promise<FatorPeriodo> {
+  const nome = getIndiceNome(indice)
+  const r: FatorPeriodo = { fator: 1, linhas: [], rotulos: [], aplicados: 0, esperados: 0, descricao: [], avisos: [] }
+  const inicio = paraDate(di)
+  const fim = paraDate(df)
+
+  const dia = di.dia > 28 ? 1 : di.dia
+  const periodos: { inicio: Date; fim: Date }[] = []
+  let base = new Date(di.ano, di.mes - 1 + (di.dia > 28 ? 1 : 0), dia)
+  while (true) {
+    const proximo = new Date(base.getFullYear(), base.getMonth() + 1, dia)
+    if (proximo > fim) break
+    periodos.push({ inicio: base, fim: proximo })
+    base = proximo
+  }
+
+  let serie: number
+  if (nome === "Poupança") {
+    const regraNova = inicio >= INICIO_REGRA_NOVA_POUPANCA
+    serie = regraNova ? SERIE_POUPANCA_NOVA : SERIE_POUPANCA_ANTIGA
+    r.descricao.push(
+      `Metodologia: rendimento nos aniversários (dia ${dia}), taxa vigente no início de cada período — igual à Calculadora do Cidadão.`,
+      `Regra da poupança: ${regraNova ? "NOVA (depósitos a partir de 04/05/2012)" : "ANTIGA (depósitos até 03/05/2012)"} — BCB série ${serie}.`,
+    )
+  } else {
+    serie = SERIE_TR_DIARIA
+    r.descricao.push(
+      `Metodologia: TR aplicada nos aniversários (dia ${dia}), taxa do período iniciado em cada aniversário — igual à Calculadora do Cidadão.`,
+      `Fonte: BCB série ${serie} (TR diária por data de início).`,
+    )
+  }
+  if (di.dia > 28) r.descricao.push(`Data inicial no dia ${di.dia}: aniversários contados a partir do dia 01 do mês seguinte (regra BCB).`)
+
+  let taxas: Map<string, number> | null = null
+  if (periodos.length > 0) {
+    try {
+      taxas = await obterSerieDiaria(serie, periodos[0].inicio, periodos[periodos.length - 1].inicio)
+    } catch (erro) {
+      r.avisos.push(`Não foi possível consultar a série diária ${serie} do BCB (${erro instanceof Error ? erro.message : erro}).`)
+    }
+  }
+
+  // Fallback: taxa mensal armazenada (dia 01 do mês de início do período)
+  const mensais = new Map<string, number>()
+  for (const d of await obterIndicesAtualizados(indice)) mensais.set(`${d.ano}-${d.mes}`, d.valor)
+
+  let aproximados = 0
+  for (const p of periodos) {
+    r.esperados++
+    const mes = p.fim.getMonth() + 1
+    const ano = p.fim.getFullYear()
+    r.rotulos.push(`${fmtCurta(p.inicio)} a ${fmtCurta(p.fim)}`)
+    let taxa = taxas?.get(formatarData(p.inicio))
+    if (taxa === undefined) {
+      const mensal = mensais.get(`${p.inicio.getFullYear()}-${p.inicio.getMonth() + 1}`)
+      if (mensal !== undefined) {
+        taxa = mensal
+        aproximados++
+      }
+    }
+    if (taxa === undefined) {
+      r.linhas.push({ mes, ano, pendente: true, fatorAcumulado: r.fator, valorAcumulado: r.fator })
+      continue
+    }
+    r.aplicados++
+    const fm = 1 + taxa / 100
+    r.fator *= fm
+    r.linhas.push({ mes, ano, pendente: false, percentual: taxa, fatorMensal: fm, fatorAcumulado: r.fator, valorAcumulado: r.fator })
+  }
+
+  if (aproximados > 0) {
+    r.avisos.push(
+      `${aproximados} período(s) calculado(s) com a taxa mensal armazenada (dia 01) por indisponibilidade da taxa diária do BCB — resultado APROXIMADO. Refaça o cálculo com conexão ao BCB para o valor oficial.`,
+    )
+  }
+  if (r.aplicados < r.esperados) {
+    r.avisos.push(`${r.esperados - r.aplicados} período(s) sem taxa publicada — o fator não inclui esses períodos.`)
+  }
+  if (periodos.length === 0) {
+    r.descricao.push(`Nenhum aniversário completo entre as datas informadas: não há rendimento no período.`)
+  }
+  return r
+}
+
+async function fatorDiario(di: DataCalculo, df: DataCalculo, indice: string): Promise<FatorPeriodo> {
+  const nome = getIndiceNome(indice)
+  const serie = nome === "CDI" ? SERIE_CDI_DIARIA : SERIE_SELIC_DIARIA
+  const r: FatorPeriodo = { fator: 1, linhas: [], rotulos: [], aplicados: 0, esperados: 0, descricao: [], avisos: [] }
+  const inicio = paraDate(di)
+  const fim = paraDate(df)
+  r.descricao.push(
+    `Metodologia: taxa ${nome} diária acumulada em cada dia útil de ${fmtCurta(inicio)} (inclusive) a ${fmtCurta(fim)} (exclusive) — igual à Calculadora do Cidadão.`,
+    `Fonte: BCB série ${serie} (% ao dia). Linhas abaixo agrupam os dias úteis por mês.`,
+  )
+  if (fim <= inicio) return r
+
+  const ultimoDia = somarDias(fim, -1)
+  let taxas: Map<string, number>
+  try {
+    taxas = await obterSerieDiaria(serie, inicio, ultimoDia)
+  } catch (erro) {
+    // Fallback: taxa mensal acumulada armazenada (meses inteiros)
+    r.avisos.push(
+      `Não foi possível consultar a série diária ${serie} do BCB (${erro instanceof Error ? erro.message : erro}). ` +
+        `Usada a taxa mensal acumulada armazenada, considerando meses inteiros — resultado APROXIMADO. Refaça o cálculo com conexão ao BCB para o valor oficial.`,
+    )
+    const mensal = await fatorMensal(di, { ...df, dia: 1, mes: ultimoDia.getMonth() + 1, ano: ultimoDia.getFullYear() }, indice)
+    return { ...mensal, descricao: r.descricao, avisos: [...r.avisos, ...mensal.avisos] }
+  }
+
+  let ultimaDataComTaxa: Date | null = null
+  let d = new Date(inicio)
+  while (d < fim) {
+    const mes = d.getMonth() + 1
+    const ano = d.getFullYear()
+    const inicioMes = new Date(d)
+    let fatorMes = 1
+    let diasUteis = 0
+    while (d < fim && d.getMonth() + 1 === mes) {
+      const taxa = taxas.get(formatarData(d))
+      if (taxa !== undefined) {
+        fatorMes *= 1 + taxa / 100
+        diasUteis++
+        ultimaDataComTaxa = new Date(d)
+      }
+      d = somarDias(d, 1)
+    }
+    r.esperados++
+    r.rotulos.push(`${fmtCurta(inicioMes)} a ${fmtCurta(somarDias(d, -1))} (${diasUteis} dias úteis)`)
+    if (diasUteis === 0) {
+      r.linhas.push({ mes, ano, pendente: true, fatorAcumulado: r.fator, valorAcumulado: r.fator })
+      continue
+    }
+    r.aplicados++
+    r.fator *= fatorMes
+    r.linhas.push({ mes, ano, pendente: false, percentual: (fatorMes - 1) * 100, fatorMensal: fatorMes, fatorAcumulado: r.fator, valorAcumulado: r.fator })
+  }
+
+  // Taxas publicadas só até dias úteis passados: avisar se o fim do período ainda não tem taxa
+  if (!ultimaDataComTaxa || ultimoDia.getTime() - ultimaDataComTaxa.getTime() > 5 * 86400000) {
+    r.avisos.push(
+      `Taxas diárias publicadas pelo BCB até ${ultimaDataComTaxa ? fmtCurta(ultimaDataComTaxa) : "—"}; os dias seguintes até ${fmtCurta(ultimoDia)} ainda não têm taxa e não foram corrigidos.`,
+    )
+  }
+  return r
+}
+
+export async function calcularFatorPeriodo(di: DataCalculo, df: DataCalculo, indice: string): Promise<FatorPeriodo> {
+  const metodologia = metodologiaDoIndice(indice)
+  if (metodologia === "aniversario") return fatorAniversario(di, df, indice)
+  if (metodologia === "diaria") return fatorDiario(di, df, indice)
+  return fatorMensal(di, df, indice)
 }
 
 // Cálculo principal
@@ -665,73 +899,53 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   }
   memoriaCalculo.push(``)
 
+  // Deflação: data final anterior à inicial → fator = 1 / fator(final → inicial)
+  const deflacao = paraDate(parametros.dataFinal) < paraDate(parametros.dataInicial)
+  const periodoDe = deflacao ? parametros.dataFinal : parametros.dataInicial
+  const periodoAte = deflacao ? parametros.dataInicial : parametros.dataFinal
+
   // Período (exibição)
-  const periodo = calcularDiferencaData(parametros.dataInicial, parametros.dataFinal)
+  const periodo = calcularDiferencaData(periodoDe, periodoAte)
   memoriaCalculo.push(`Período: ${periodo.meses} meses e ${periodo.dias} dias`)
 
-// Obter índices do período — Metodologia BCB Calculadora do Cidadão
-  // Fórmula: fator = ∏(1 + taxa_i / 100) para cada mês do período
-  const indicesDBPeriodo = await obterIndicesPeriodo(parametros.dataInicial, parametros.dataFinal, parametros.indice)
-
-  // Cálculo do fator e memorial em passo único — consistência total entre exibição e resultado
-  let fatorCorrecao = 1
-  const detalhamentoIGPM: DetalheLinha[] = []
-  let contadorMesesComDado = 0
-  const mesesNomes = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
+  // Fator e memorial em passo único — consistência total entre exibição e resultado
+  const fp = await calcularFatorPeriodo(periodoDe, periodoAte, parametros.indice)
+  const fatorCorrecao = deflacao ? 1 / fp.fator : fp.fator
+  // Valor na data mais antiga do período; as linhas mostram sua evolução até a data mais recente
+  const valorBase = deflacao ? parametros.valorOriginal / fp.fator : parametros.valorOriginal
+  const detalhamentoIGPM: DetalheLinha[] = fp.linhas.map((l) => ({ ...l, valorAcumulado: valorBase * l.fatorAcumulado }))
 
   memoriaCalculo.push(``)
-  memoriaCalculo.push(`=== DETALHAMENTO MÊS A MÊS — ${nomeIndice} (Metodologia: BCB Calculadora do Cidadão) ===${""}`)
+  memoriaCalculo.push(`=== DETALHAMENTO — ${nomeIndice} (Metodologia: BCB Calculadora do Cidadão) ===`)
+  for (const linha of fp.descricao) memoriaCalculo.push(linha)
+  if (deflacao) {
+    memoriaCalculo.push(
+      `DEFLAÇÃO: data final anterior à inicial. Tabela calculada de ${fmtCurta(paraDate(periodoDe))} a ${fmtCurta(paraDate(periodoAte))}; fator aplicado = 1 / ${fp.fator.toFixed(8)}.`,
+    )
+  }
 
-  if (indicesDBPeriodo.length === 0) {
-    memoriaCalculo.push(`Nenhum índice encontrado para o período informado.`)
-    memoriaCalculo.push(`Verifique se o índice ${nomeIndice} possui dados para este período ou clique em "Atualizar do BCB".`)
+  if (fp.esperados === 0) {
+    memoriaCalculo.push(``)
+    memoriaCalculo.push(`Nenhum período de correção entre as datas informadas (fator = 1).`)
   } else {
     memoriaCalculo.push(``)
-    memoriaCalculo.push(`| # | Período | ${nomeIndice} (%) | Fator Mensal | Fator Acumulado | Valor Acumulado (R$) |`)
-    memoriaCalculo.push(`|---|---------|${"−".repeat(Math.max(nomeIndice.length + 6, 14))}|--------------|-----------------|---------------------|`)
-
-    let mesIt = parametros.dataInicial.mes
-    let anoIt = parametros.dataInicial.ano
-    while (anoIt < parametros.dataFinal.ano || (anoIt === parametros.dataFinal.ano && mesIt <= parametros.dataFinal.mes)) {
-      const indiceDoMes = indicesDBPeriodo.find((x) => x.mes === mesIt && x.ano === anoIt)
-      if (indiceDoMes) {
-        contadorMesesComDado++
-        const fatorMensal = 1 + indiceDoMes.valor / 100
-        fatorCorrecao *= fatorMensal
-        const valorAcum = parametros.valorOriginal * fatorCorrecao
-        detalhamentoIGPM.push({
-          mes: mesIt,
-          ano: anoIt,
-          pendente: false,
-          percentual: indiceDoMes.valor,
-          fatorMensal,
-          fatorAcumulado: fatorCorrecao,
-          valorAcumulado: valorAcum,
-        })
-        memoriaCalculo.push(
-          `| ${String(contadorMesesComDado).padStart(2, " ")} | ${mesesNomes[mesIt - 1]}/${anoIt} | ${indiceDoMes.valor.toFixed(4).replace(".", ",")} | ${fatorMensal.toFixed(8)} | ${fatorCorrecao.toFixed(8)} | R$ ${valorAcum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`
-        )
-      } else {
-        detalhamentoIGPM.push({
-          mes: mesIt,
-          ano: anoIt,
-          pendente: true,
-          fatorAcumulado: fatorCorrecao,
-          valorAcumulado: parametros.valorOriginal * fatorCorrecao,
-        })
-        memoriaCalculo.push(
-          `|  — | ${mesesNomes[mesIt - 1]}/${anoIt} | ⚠ não disponível | — | ${fatorCorrecao.toFixed(8)} | — |`
-        )
+    memoriaCalculo.push(`| # | Período | ${nomeIndice} (%) | Fator do Período | Fator Acumulado | Valor Acumulado (R$) |`)
+    memoriaCalculo.push(`|---|---------|${"−".repeat(Math.max(nomeIndice.length + 6, 14))}|------------------|-----------------|---------------------|`)
+    let contador = 0
+    detalhamentoIGPM.forEach((l, i) => {
+      if (l.pendente) {
+        memoriaCalculo.push(`|  — | ${fp.rotulos[i]} | ⚠ não disponível | — | ${l.fatorAcumulado.toFixed(8)} | — |`)
+        return
       }
-      mesIt++
-      if (mesIt > 12) { mesIt = 1; anoIt++ }
-    }
+      contador++
+      memoriaCalculo.push(
+        `| ${String(contador).padStart(2, " ")} | ${fp.rotulos[i]} | ${l.percentual!.toFixed(6).replace(".", ",")} | ${l.fatorMensal!.toFixed(8)} | ${l.fatorAcumulado.toFixed(8)} | R$ ${l.valorAcumulado.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} |`,
+      )
+    })
     memoriaCalculo.push(``)
-    memoriaCalculo.push(`Meses com índices aplicados: ${contadorMesesComDado} de ${detalhamentoIGPM.length} esperados no período`)
-    if (contadorMesesComDado < detalhamentoIGPM.length) {
-      memoriaCalculo.push(`⚠ ATENÇÃO: ${detalhamentoIGPM.length - contadorMesesComDado} mês(es) sem dado — clique em "Atualizar do BCB" para buscar os dados mais recentes.`)
-    }
+    memoriaCalculo.push(`Períodos com índice aplicado: ${fp.aplicados} de ${fp.esperados}`)
   }
+  for (const aviso of fp.avisos) memoriaCalculo.push(`⚠ ATENÇÃO: ${aviso}`)
 
   let detalhamentoPoupanca: DetalheLinha[] | undefined = undefined
 
@@ -846,8 +1060,8 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   const fontesPorIndice: Record<string, string[]> = {
     "IGP-M": [
       "IGP-M (Índice Geral de Preços - Mercado) — FGV/IBRE",
-      "Banco Central do Brasil — Série BCB 189",
-      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.189/dados",
+      "Banco Central do Brasil — Série BCB 28655 (IGP-M, mesma da Calculadora do Cidadão)",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.28655/dados",
       "Ipeadata — Série IGP12_IGPMG12",
     ],
     "IPCA": [
@@ -863,22 +1077,22 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
     ],
     "Poupança": [
       "Poupança — remuneração mensal dos depósitos (TR + 0,5%/mês ou 70% SELIC)",
-      "Banco Central do Brasil — Série BCB 195",
+      "Banco Central do Brasil — Séries BCB 195 (regra nova) e 25 (regra antiga), taxa diária por aniversário",
       "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.195/dados",
     ],
     "CDI": [
       "CDI (Certificado de Depósito Interbancário) — taxa acumulada ao mês",
-      "Banco Central do Brasil — Série BCB 4391",
-      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.4391/dados",
+      "Banco Central do Brasil — Série BCB 12 (CDI diário)",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.12/dados",
     ],
     "SELIC": [
       "SELIC (Sistema Especial de Liquidação e de Custódia) — taxa efetiva acumulada ao mês",
-      "Banco Central do Brasil — Série BCB 4390",
-      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.4390/dados",
+      "Banco Central do Brasil — Série BCB 11 (SELIC diária)",
+      "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados",
     ],
     "TR": [
       "TR (Taxa Referencial) — taxa mensal",
-      "Banco Central do Brasil — Série BCB 226",
+      "Banco Central do Brasil — Série BCB 226 (TR diária por data de início)",
       "API: https://api.bcb.gov.br/dados/serie/bcdata.sgs.226/dados",
     ],
   }
@@ -1056,8 +1270,11 @@ export function validarDatas(dataInicial: DataCalculo, dataFinal: DataCalculo): 
   const inicio = new Date(dataInicial.ano, dataInicial.mes - 1, dataInicial.dia)
   const fim = new Date(dataFinal.ano, dataFinal.mes - 1, dataFinal.dia)
 
-  if (isNaN(inicio.getTime())) erros.push("Data inicial inválida")
-  if (isNaN(fim.getTime())) erros.push("Data final inválida")
+  // new Date(2025, 1, 31) "rola" para 03/03 — conferir se o dia informado existe no mês
+  const existe = (d: DataCalculo, dt: Date) =>
+    !isNaN(dt.getTime()) && dt.getDate() === d.dia && dt.getMonth() === d.mes - 1 && dt.getFullYear() === d.ano
+  if (!existe(dataInicial, inicio)) erros.push(`Data inicial inválida: ${dataInicial.dia}/${dataInicial.mes}/${dataInicial.ano} não existe`)
+  if (!existe(dataFinal, fim)) erros.push(`Data final inválida: ${dataFinal.dia}/${dataFinal.mes}/${dataFinal.ano} não existe`)
   if (fim < inicio) erros.push("ATENÇÃO: Data final anterior à inicial - será realizado deflacionamento")
 
   return erros

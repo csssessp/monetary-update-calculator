@@ -505,6 +505,9 @@ ANO-MM   TAXA_%   OBSERVAÇÃO
 2026-04   0.6687
 2026-05   0.6695  # BCB Série 195 dia 01/05/2026 — adicionado em 2026-06-29
 2026-06   0.6718  # BCB Série 195 dia 01/06/2026 — adicionado em 2026-06-29 (mês em curso)
+2026-07   0.6738  # BCB Série 195 dia 01/07/2026 — adicionado em 2026-09-23
+2026-08   0.6701  # BCB Série 195 dia 01/08/2026 — adicionado em 2026-09-23
+2026-09   0.6698  # BCB Série 195 dia 01/09/2026 — adicionado em 2026-09-23
 
 ================================================================================
 LOG DE ATUALIZAÇÕES
@@ -514,12 +517,13 @@ DATA         AÇÃO                        MESES ADICIONADOS       FONTE
 2026-06-29   Criação do arquivo          1986-08 a 2026-06       BCB Série 195
 2026-06-29   Correção bug fetch BCB      Todos os meses          Primeiro dia/mês
 2026-06-29   Correção IGP-M 1991        Nov-Dez/1991            BCB Série 189
+2026-09-23   Sincronização BCB           2026-07 a 2026-09       BCB Série 195
 
 ================================================================================
 VERIFICAÇÃO DE INTEGRIDADE
 ================================================================================
-Total de meses registrados : 479 (Ago/1986 a Jun/2026)
+Total de meses registrados : 482 (Ago/1986 a Set/2026)
 Meses sem dado disponível  : Fev/2013 (mês de início do cálculo — sem índice
                              aplicado ao mês base, apenas ao mês seguinte)
-Próxima atualização esperada: Jul/2026 (disponível ~05/07/2026 no BCB)
+Próxima atualização esperada: Out/2026 (publicada no BCB em 01/10/2026)
 ================================================================================

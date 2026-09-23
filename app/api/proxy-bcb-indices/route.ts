@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Sempre dinâmica: usada pelo cálculo para buscar as taxas diárias do BCB (Poupança, TR, SELIC, CDI)
+export const dynamic = 'force-dynamic'
+
 /**
  * Proxy para API do BCB (resolves CORS issues)
  * GET /api/proxy-bcb-indices?serie=189&dataInicial=01/01/2025&dataFinal=31/12/2025

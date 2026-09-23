@@ -11,14 +11,23 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Calculator, AlertTriangle, Download, FileText, Loader2, RefreshCw, CreditCard, TrendingUp, Landmark, PiggyBank, BarChart2, Activity, DollarSign } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Progress } from "@/components/ui/progress"
 import {
   calcularCorrecaoMonetaria,
   validarDatas,
   type ParametrosCalculo,
   type ResultadoCalculo,
 } from "@/lib/calculo-monetario"
-import { atualizarIndicesNoCache } from "@/lib/fetch-indices"
+import {
+  atualizarIndicesNoCache,
+  atualizarIndicesComProgresso,
+  lerRelatorioAtualizacao,
+  precisaAtualizarNoMes,
+  type ProgressoAtualizacao,
+  type RelatorioAtualizacao,
+} from "@/lib/fetch-indices"
+import { indicesData } from "@/lib/indices-data"
 import { useToast } from "@/components/ui/use-toast"
 
 interface FormData {
@@ -45,17 +54,40 @@ interface FormData {
 export default function CalculadoraAtualizacaoMonetaria() {
   const { toast } = useToast()
 
-  // Auto-atualizar índices da Poupança ao carregar (silencioso, sem intervenção do usuário)
+  // Estado da atualização de índices (botão, aviso mensal e barra de progresso)
+  const [relatorioIndices, setRelatorioIndices] = useState<RelatorioAtualizacao | null>(null)
+  const [progressoIndices, setProgressoIndices] = useState<ProgressoAtualizacao | null>(null)
+  const [avisoMensalAberto, setAvisoMensalAberto] = useState(false)
+
+  // Ao abrir: carregar o último relatório e, se ainda não houve atualização completa neste mês, pedir para atualizar
   useEffect(() => {
-    fetch("/api/poupanca-indices", { method: "POST" })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.atualizado) {
-          console.log(`[Poupança] Auto-atualizado: ${d.mensagem}`)
-        }
-      })
-      .catch(() => { /* silencioso */ })
+    setRelatorioIndices(lerRelatorioAtualizacao())
+    if (precisaAtualizarNoMes()) setAvisoMensalAberto(true)
   }, [])
+
+  const atualizarIndices = async () => {
+    if (progressoIndices) return
+    setProgressoIndices({ concluidos: 0, total: 1, etapa: "Iniciando..." })
+    try {
+      const relatorio = await atualizarIndicesComProgresso(setProgressoIndices)
+      setRelatorioIndices(relatorio)
+      const falhas = relatorio.itens.filter((i) => !i.ok)
+      if (relatorio.sucesso) {
+        setAvisoMensalAberto(false)
+        toast({ title: "Índices atualizados", description: "Todos os índices foram sincronizados com o Banco Central." })
+      } else {
+        toast({
+          title: "Atualização incompleta",
+          description: `Não foi possível atualizar: ${falhas.map((f) => f.nome).join(", ")}. Os dados já armazenados continuam válidos; tente novamente mais tarde.`,
+          variant: "destructive",
+        })
+      }
+    } catch (erro) {
+      toast({ title: "Erro ao atualizar índices", description: String(erro), variant: "destructive" })
+    } finally {
+      setProgressoIndices(null)
+    }
+  }
 
   const [formData, setFormData] = useState<FormData>({
     descricao: "",
@@ -84,24 +116,26 @@ export default function CalculadoraAtualizacaoMonetaria() {
   const [mensagemAtualizacao, setMensagemAtualizacao] = useState<string>("")
   const [calculando, setCalculando] = useState(false)
 
-  const obterDataAtualFormatada = () => {
-    const agora = new Date()
-    const mesesAbreviados = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
-    const mesAtual = mesesAbreviados[agora.getMonth()]
-    const anoAtual = agora.getFullYear()
-    return `${mesAtual}/${anoAtual}`
+  // Período real de dados de cada índice (início fixo pela fonte; fim pelo último dado disponível)
+  const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+  const fimDoIndice = (curto: string, diario: boolean): string => {
+    const item = relatorioIndices?.itens.find((i) => i.nome === (diario ? "Taxas diárias (SELIC/CDI/TR/Poupança)" : curto))
+    if (item?.ok && item.ultimo) {
+      const partes = item.ultimo.split("/").map(Number) // MM/AAAA ou DD/MM/AAAA
+      return partes.length === 3 ? item.ultimo : `${MESES_ABREV[partes[0] - 1]}/${partes[1]}`
+    }
+    const estaticos = (indicesData as Record<string, readonly { mes: number; ano: number }[]>)[curto] ?? []
+    const ultimo = estaticos[estaticos.length - 1]
+    return ultimo ? `${MESES_ABREV[ultimo.mes - 1]}/${ultimo.ano}` : "—"
   }
-
-  const dataAtualFormatada = obterDataAtualFormatada()
-
   const indicesDisponiveis = [
-    `IGP-M (FGV) ...... (jun/1989 a ${dataAtualFormatada})`,
-    `IPCA (IBGE) ...... (jul/1994 a ${dataAtualFormatada})`,
-    `INPC (IBGE) ...... (jul/1994 a ${dataAtualFormatada})`,
-    `Poupança ...... (mai/2012 a ${dataAtualFormatada})`,
-    `CDI ...... (jan/2010 a ${dataAtualFormatada})`,
-    `SELIC ...... (jan/2010 a ${dataAtualFormatada})`,
-    `TR (Taxa Referencial) ...... (jan/1991 a ${dataAtualFormatada})`,
+    { valor: "IGP-M (FGV)", inicio: "jun/1989", fim: fimDoIndice("IGP-M", false) },
+    { valor: "IPCA (IBGE)", inicio: "jul/1994", fim: fimDoIndice("IPCA", false) },
+    { valor: "INPC (IBGE)", inicio: "jul/1994", fim: fimDoIndice("INPC", false) },
+    { valor: "Poupança", inicio: "ago/1986", fim: fimDoIndice("Poupança", false) },
+    { valor: "CDI", inicio: "mar/1986", fim: fimDoIndice("CDI", true) },
+    { valor: "SELIC", inicio: "jun/1986", fim: fimDoIndice("SELIC", true) },
+    { valor: "TR (Taxa Referencial)", inicio: "fev/1991", fim: fimDoIndice("TR", false) },
   ]
 
   const meses = [
@@ -167,6 +201,14 @@ export default function CalculadoraAtualizacaoMonetaria() {
     if (!formData.dataFinal.dia || !formData.dataFinal.mes || !formData.dataFinal.ano)
       novosErros.push("Data final deve ser preenchida completamente")
     if (!formData.indice) novosErros.push("Índice deve ser selecionado")
+    if (novosErros.length === 0) {
+      const errosDatas = validarDatas(
+        { dia: Number(formData.dataInicial.dia), mes: Number(formData.dataInicial.mes), ano: Number(formData.dataInicial.ano) },
+        { dia: Number(formData.dataFinal.dia), mes: Number(formData.dataFinal.mes), ano: Number(formData.dataFinal.ano) },
+      )
+      // Avisos começam com "ATENÇÃO" (ex.: deflação) e não bloqueiam; datas inexistentes bloqueiam
+      novosErros.push(...errosDatas.filter((e) => !e.startsWith("ATENÇÃO")))
+    }
 
     if (novosErros.length > 0) {
       console.log("[CALCULAR] Erros de validação:", novosErros)
@@ -181,7 +223,8 @@ export default function CalculadoraAtualizacaoMonetaria() {
     setMensagemAtualizacao("🔄 Sincronizando índices com Banco Central...")
 
     try {
-      const sucesso = await atualizarIndicesNoCache()
+      const sucesso = await atualizarIndicesNoCache(setProgressoIndices)
+      setRelatorioIndices(lerRelatorioAtualizacao())
       if (!sucesso) {
         console.warn("⚠️ Alguns índices não foram atualizados, usando cache local")
         setMensagemAtualizacao("⚠️ Usando dados em cache local - alguns índices não foram sincronizados")
@@ -193,6 +236,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
       setMensagemAtualizacao("⚠️ Usando dados em cache local")
     } finally {
       setAtualizandoIndices(false)
+      setProgressoIndices(null)
     }
 
     // ✅ PROSSEGUIR COM O CÁLCULO USANDO OS ÍNDICES ATUALIZADOS
@@ -306,7 +350,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
     </head>
     <body>
       <div class="header">
-        <img src="${base64Logo}" alt="Secretaria da Saúde - São Paulo" class="logo" />
+        <img src="${base64Logo}" alt="Governo do Estado de São Paulo - Secretaria da Saúde" class="logo" />
         <div class="title">Calculadora de Atualização Monetária - CGOF</div>
         <div class="subtitle">Memória de Cálculo Detalhada</div>
         <div class="subtitle">Data: ${new Date().toLocaleDateString("pt-BR")}</div>
@@ -332,7 +376,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
       }, 1000)
     }
 
-    img.src = "/images/secretaria-saude-sp.png"
+    img.src = "/images/brasao-sp-saude.png"
   }
 
   const gerarXLSX = async () => {
@@ -422,7 +466,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
       const printContent = `
     <div style="font-family: Arial, sans-serif; margin: 20px; line-height: 1.4;">
       <div style="text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px;">
-        <img src="${base64Logo}" alt="Secretaria da Saúde - São Paulo" style="height: 80px; margin-bottom: 15px; max-width: 100%;" />
+        <img src="${base64Logo}" alt="Governo do Estado de São Paulo - Secretaria da Saúde" style="height: 80px; margin-bottom: 15px; max-width: 100%;" />
         <div style="font-size: 24px; font-weight: bold; margin: 10px 0; color: #333;">Calculadora de Atualização Monetária - CGOF</div>
         <div style="font-size: 16px; color: #666; margin-bottom: 10px;">Memória de Cálculo Detalhada</div>
         <div style="font-size: 14px; color: #666;">Data: ${new Date().toLocaleDateString("pt-BR")}</div>
@@ -455,7 +499,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
       }, 500)
     }
 
-    img.src = "/images/secretaria-saude-sp.png"
+    img.src = "/images/brasao-sp-saude.png"
   }
 
   const isIGPM = formData.indice.includes("IGP-M")
@@ -469,8 +513,8 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
           <div className="max-w-6xl mx-auto flex items-center gap-6">
             <div className="flex-shrink-0">
               <img 
-                src="/images/secretaria-saude-sp.png" 
-                alt="Secretaria da Saúde - São Paulo" 
+                src="/images/brasao-sp-saude.png" 
+                alt="Governo do Estado de São Paulo - Secretaria da Saúde" 
                 className="h-24 w-auto"
               />
             </div>
@@ -484,6 +528,87 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
           </div>
         </div>
 
+        {/* Status e atualização dos índices */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 text-blue-600" />
+                Índices do Banco Central
+              </h3>
+              <p className="text-sm text-gray-500">
+                {relatorioIndices
+                  ? `Última atualização: ${new Date(relatorioIndices.data).toLocaleString("pt-BR")}${relatorioIndices.sucesso ? "" : " (incompleta)"}`
+                  : "Ainda não atualizados neste navegador — usando os dados oficiais embarcados no sistema."}
+              </p>
+            </div>
+            <Button onClick={atualizarIndices} disabled={!!progressoIndices || calculando} className="shrink-0">
+              {progressoIndices ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              {progressoIndices ? "Atualizando..." : "Atualizar índices"}
+            </Button>
+          </div>
+
+          {progressoIndices && !calculando && (
+            <div className="mt-4">
+              <Progress value={(progressoIndices.concluidos / progressoIndices.total) * 100} className="h-3 [&>div]:bg-blue-600" />
+              <p className="text-xs text-gray-600 mt-1">
+                {progressoIndices.concluidos} de {progressoIndices.total} — {progressoIndices.etapa}
+              </p>
+            </div>
+          )}
+
+          {relatorioIndices && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {relatorioIndices.itens.map((item) => (
+                <span
+                  key={item.nome}
+                  title={item.erro ?? `${item.registros} registros`}
+                  className={`text-xs px-2 py-1 rounded-full border ${
+                    item.ok ? "bg-green-50 border-green-200 text-green-800" : "bg-amber-50 border-amber-300 text-amber-800"
+                  }`}
+                >
+                  {item.ok ? "✓" : "⚠"} {item.nome}
+                  {item.ultimo ? ` · até ${item.ultimo}` : ""}
+                  {!item.ok ? " · falhou" : ""}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Aviso mensal: a cada novo mês o sistema pede para atualizar os índices */}
+        <Dialog open={avisoMensalAberto && !calculando} onOpenChange={(aberto) => !progressoIndices && setAvisoMensalAberto(aberto)}>
+          <DialogContent className="sm:max-w-md" onInteractOutside={(e) => progressoIndices && e.preventDefault()}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5 text-blue-600" />
+                Atualize os índices deste mês
+              </DialogTitle>
+              <DialogDescription>
+                Começou um novo mês e os índices ainda não foram atualizados. Atualize para garantir que os cálculos usem
+                os valores mais recentes publicados pelo Banco Central.
+              </DialogDescription>
+            </DialogHeader>
+            {progressoIndices && (
+              <div className="py-2">
+                <Progress value={(progressoIndices.concluidos / progressoIndices.total) * 100} className="h-3 [&>div]:bg-blue-600" />
+                <p className="text-xs text-gray-600 mt-1">
+                  {progressoIndices.concluidos} de {progressoIndices.total} — {progressoIndices.etapa}
+                </p>
+              </div>
+            )}
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setAvisoMensalAberto(false)} disabled={!!progressoIndices}>
+                Lembrar depois
+              </Button>
+              <Button onClick={atualizarIndices} disabled={!!progressoIndices}>
+                {progressoIndices ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                {progressoIndices ? "Atualizando..." : "Atualizar agora"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl shadow-sm border border-blue-100 mb-6">
           <h3 className="text-lg font-bold mb-1 text-blue-900 flex items-center gap-2">
             <BarChart2 className="h-5 w-5 text-blue-600" />
@@ -496,7 +621,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
               <div>
                 <p className="font-semibold text-gray-800 text-sm">IGP-M (FGV)</p>
                 <p className="text-xs text-gray-500">Índice Geral de Preços – Mercado</p>
-                <p className="text-xs text-blue-600 mt-1">Fundação Getúlio Vargas · BCB Série 189</p>
+                <p className="text-xs text-blue-600 mt-1">Fundação Getúlio Vargas · BCB Série 28655</p>
               </div>
             </div>
             <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
@@ -520,7 +645,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
               <div>
                 <p className="font-semibold text-gray-800 text-sm">Poupança</p>
                 <p className="text-xs text-gray-500">Rendimento mensal da Caderneta de Poupança</p>
-                <p className="text-xs text-blue-600 mt-1">Banco Central do Brasil · BCB Série 195</p>
+                <p className="text-xs text-blue-600 mt-1">BCB Séries 195 (regra nova) e 25 (regra antiga) · taxa diária por aniversário</p>
               </div>
             </div>
             <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
@@ -528,7 +653,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
               <div>
                 <p className="font-semibold text-gray-800 text-sm">CDI</p>
                 <p className="text-xs text-gray-500">Certificado de Depósito Interbancário</p>
-                <p className="text-xs text-blue-600 mt-1">B3/CETIP · BCB Série 4391</p>
+                <p className="text-xs text-blue-600 mt-1">B3/CETIP · BCB Série 12 (taxa diária)</p>
               </div>
             </div>
             <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
@@ -536,7 +661,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
               <div>
                 <p className="font-semibold text-gray-800 text-sm">SELIC</p>
                 <p className="text-xs text-gray-500">Taxa Básica de Juros da Economia</p>
-                <p className="text-xs text-blue-600 mt-1">Banco Central do Brasil · BCB Série 4390</p>
+                <p className="text-xs text-blue-600 mt-1">Banco Central do Brasil · BCB Série 11 (taxa diária)</p>
               </div>
             </div>
             <div className="bg-white rounded-lg p-3 border border-blue-100 flex items-start gap-3 shadow-sm">
@@ -544,7 +669,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
               <div>
                 <p className="font-semibold text-gray-800 text-sm">TR (Taxa Referencial)</p>
                 <p className="text-xs text-gray-500">Taxa de remuneração de depósitos de poupança</p>
-                <p className="text-xs text-blue-600 mt-1">Banco Central do Brasil · BCB Série 226</p>
+                <p className="text-xs text-blue-600 mt-1">Banco Central do Brasil · BCB Série 226 (taxa diária por aniversário)</p>
               </div>
             </div>
           </div>
@@ -563,8 +688,16 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                 <div className="py-6 text-center">
                   {atualizandoIndices ? (
                     <>
-                      <p className="text-blue-700 font-medium mb-2">🔄 Sincronizando com Banco Central...</p>
-                      <p className="text-sm text-gray-500">Buscando índices atualizados</p>
+                      <p className="text-blue-700 font-medium mb-3">🔄 Sincronizando com Banco Central...</p>
+                      <Progress
+                        value={progressoIndices ? (progressoIndices.concluidos / progressoIndices.total) * 100 : 0}
+                        className="h-3 [&>div]:bg-blue-600"
+                      />
+                      <p className="text-xs text-gray-500 mt-2">
+                        {progressoIndices
+                          ? `${progressoIndices.concluidos} de ${progressoIndices.total} — ${progressoIndices.etapa}`
+                          : "Buscando índices atualizados"}
+                      </p>
                     </>
                   ) : (
                     <>
@@ -740,9 +873,9 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   <SelectValue placeholder="Selecione o índice" />
                 </SelectTrigger>
                 <SelectContent>
-                  {indicesDisponiveis.map((indice, index) => (
-                    <SelectItem key={index} value={indice}>
-                      {indice}
+                  {indicesDisponiveis.map((indice) => (
+                    <SelectItem key={indice.valor} value={indice.valor}>
+                      {indice.valor} ...... ({indice.inicio} a {indice.fim})
                     </SelectItem>
                   ))}
                 </SelectContent>

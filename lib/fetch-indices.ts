@@ -1,61 +1,5 @@
-import { IndiceData } from "./indices-data"
-
-/**
- * Buscar IGP-M do Ipeadata (API oficial com dados mais confiáveis)
- * Series: IGP12_IGPMG12 (IGP-M Geral - % mensal)
- */
-async function fetchIGPMFromIpeadata(): Promise<IndiceData[]> {
-  try {
-    const url = "https://ipeadata.gov.br/api/odata4/ValoresSerie(SERCODIGO='IGP12_IGPMG12')?$format=json"
-    const response = await fetch(url, { cache: "no-store" })
-
-    if (!response.ok) {
-      console.warn(`Ipeadata API returned ${response.status}`)
-      return []
-    }
-
-    const data = await response.json()
-    const indices: IndiceData[] = []
-
-    if (data.value && Array.isArray(data.value)) {
-      for (const item of data.value) {
-        // Data format: "2025-01-01T00:00:00"
-        if (item.VALDATA && item.VALVALOR !== null && item.VALVALOR !== undefined) {
-          const dateParts = item.VALDATA.split("T")[0].split("-")
-          const year = parseInt(dateParts[0])
-          const month = parseInt(dateParts[1])
-          const valor = parseFloat(item.VALVALOR)
-
-          if (year >= 1989 && month >= 1 && month <= 12 && !isNaN(valor)) {
-            indices.push({
-              mes: month,
-              ano: year,
-              valor, // Ipeadata já retorna em percentual
-            })
-          }
-        }
-      }
-    }
-
-    // Remover duplicatas, mantendo o último de cada mês
-    const mesesMap = new Map<string, IndiceData>()
-    for (const item of indices) {
-      const key = `${item.mes}-${item.ano}`
-      mesesMap.set(key, item) // Sobrescreve com último valor
-    }
-
-    const resultado = Array.from(mesesMap.values()).sort((a, b) => {
-      if (a.ano !== b.ano) return a.ano - b.ano
-      return a.mes - b.mes
-    })
-
-    console.log(`[FETCH] IGP-M Ipeadata: ${resultado.length} registros fetched (${resultado.length > 0 ? `${resultado[0].ano}-${resultado[resultado.length - 1].ano}` : "vazio"})`)
-    return resultado
-  } catch (error) {
-    console.error("Error fetching IGP-M from Ipeadata:", error)
-    return []
-  }
-}
+import { IndiceData, CHAVE_VERSAO_CACHE, VERSAO_CACHE_INDICES } from "./indices-data"
+import { obterSerieDiaria, SERIE_SELIC_DIARIA } from "./series-diarias"
 
 /**
  * Construir URL para API BCB SGS - funciona tanto server-side (direto) quanto client-side (via proxy)
@@ -176,19 +120,19 @@ async function fetchPoupancaSerie25(): Promise<IndiceData[]> {
 }
 
 /**
- * Buscar IGP-M do BCB (série 189)
- * Série: 189 (IGP-M - % mensal)
+ * Buscar IGP-M do BCB (série 28655 — mesma da Calculadora do Cidadão, precisão completa)
+ * A série 189 é arredondada em 2 casas e acumula erro em períodos longos
  */
 async function fetchIGPMFromBCB(): Promise<IndiceData[]> {
   try {
-    const url = buildBCBUrl(189)
+    const url = buildBCBUrl(28655)
     console.log(`[FETCH] Buscando IGP-M: ${url}`)
     const response = await fetch(url, { cache: "no-store" })
 
     if (!response.ok) {
+      // Sem fallback para Ipeadata: seus valores são arredondados e sobrescreveriam os dados exatos armazenados
       console.warn(`BCB API (IGP-M) returned ${response.status}`)
-      // Tentar Ipeadata como fallback
-      return await fetchIGPMFromIpeadata()
+      return []
     }
 
     const data = await response.json()
@@ -230,15 +174,15 @@ async function fetchIGPMFromBCB(): Promise<IndiceData[]> {
     return resultado
   } catch (error) {
     console.error("Error fetching IGP-M from BCB:", error)
-    // Fallback para Ipeadata
-    return await fetchIGPMFromIpeadata()
+    return []
   }
 }
 
 /**
- * Buscar série genérica do BCB SGS e extrair dados mensais
+ * Buscar série genérica do BCB SGS e extrair dados mensais.
+ * soMesesFechados: descarta o mês corrente (CDI/SELIC publicam acumulado parcial do mês em curso).
  */
-async function fetchSerieBCBGenerica(serie: number, nome: string): Promise<IndiceData[]> {
+async function fetchSerieBCBGenerica(serie: number, nome: string, soMesesFechados = false): Promise<IndiceData[]> {
   try {
     const url = buildBCBUrl(serie)
     console.log(`[FETCH] Buscando ${nome} (série ${serie}): ${url}`)
@@ -250,6 +194,8 @@ async function fetchSerieBCBGenerica(serie: number, nome: string): Promise<Indic
     const data = await response.json()
     if (!Array.isArray(data)) return []
 
+    const hoje = new Date()
+    const mesCorrente = hoje.getFullYear() * 12 + hoje.getMonth() + 1
     const monthMap = new Map<string, IndiceData>()
     for (const item of data) {
       if (item.data && item.valor) {
@@ -257,6 +203,7 @@ async function fetchSerieBCBGenerica(serie: number, nome: string): Promise<Indic
         const month = parseInt(dateParts[1])
         const year = parseInt(dateParts[2])
         const valor = parseFloat(item.valor.replace(",", "."))
+        if (soMesesFechados && year * 12 + month >= mesCorrente) continue
         if (year >= 1980 && month >= 1 && month <= 12 && !isNaN(valor)) {
           monthMap.set(`${month}-${year}`, { mes: month, ano: year, valor })
         }
@@ -303,9 +250,10 @@ export async function fetchAllIndices(): Promise<{
       fetchIGPMFromBCB(),
       fetchSerieBCBGenerica(433, "IPCA"),
       fetchSerieBCBGenerica(188, "INPC"),
-      fetchSerieBCBGenerica(4391, "CDI"),
-      fetchSerieBCBGenerica(4390, "SELIC"),
-      fetchSerieBCBGenerica(226, "TR"),
+      fetchSerieBCBGenerica(4391, "CDI", true),
+      fetchSerieBCBGenerica(4390, "SELIC", true),
+      // TR: série 7811 (mensal, primeiro dia do mês). A 226 é diária e o BCB recusa consulta sem datas.
+      fetchSerieBCBGenerica(7811, "TR"),
     ])
 
   const indexMapping: [PromiseSettledResult<IndiceData[]>, string][] = [
@@ -330,68 +278,172 @@ export async function fetchAllIndices(): Promise<{
   return results
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ATUALIZAÇÃO COM PROGRESSO (botão "Atualizar índices" e aviso mensal)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface ItemAtualizacao {
+  nome: string
+  ok: boolean
+  registros: number
+  ultimo?: string // "MM/AAAA" (índices mensais) ou "DD/MM/AAAA" (taxas diárias)
+  erro?: string
+}
+
+export interface RelatorioAtualizacao {
+  data: string // ISO
+  mesReferencia: string // "AAAA-MM" em que a atualização foi feita
+  sucesso: boolean
+  itens: ItemAtualizacao[]
+}
+
+export interface ProgressoAtualizacao {
+  concluidos: number
+  total: number
+  etapa: string
+}
+
+const CHAVE_RELATORIO = "indices_relatorio"
+const CHAVE_MES_ATUALIZACAO = "indices_mes_atualizacao"
+
+export function mesReferenciaAtual(): string {
+  const hoje = new Date()
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`
+}
+
+export function lerRelatorioAtualizacao(): RelatorioAtualizacao | null {
+  if (typeof window === "undefined") return null
+  try {
+    const bruto = localStorage.getItem(CHAVE_RELATORIO)
+    return bruto ? (JSON.parse(bruto) as RelatorioAtualizacao) : null
+  } catch {
+    return null
+  }
+}
+
+/** true quando ainda não houve atualização completa bem-sucedida no mês corrente */
+export function precisaAtualizarNoMes(): boolean {
+  if (typeof window === "undefined") return false
+  try {
+    return localStorage.getItem(CHAVE_MES_ATUALIZACAO) !== mesReferenciaAtual()
+  } catch {
+    return true
+  }
+}
+
+const fmtMesAno = (d: IndiceData) => `${String(d.mes).padStart(2, "0")}/${d.ano}`
+
 /**
- * Atualizar índices no cache local (localStorage)
- * Chamado APENAS no cliente antes de cada cálculo para garantir dados atualizados
+ * Atualiza todos os índices a partir do BCB, reportando o progresso etapa por etapa.
+ * Índices mensais vão para o localStorage (mesclados com os dados estáticos no cálculo);
+ * Poupança é complementada pela rota /api/poupanca-indices; as taxas diárias
+ * (Poupança, TR, SELIC, CDI) são consultadas no momento do cálculo — aqui só se confirma o acesso.
+ */
+export async function atualizarIndicesComProgresso(
+  onProgresso?: (p: ProgressoAtualizacao) => void,
+): Promise<RelatorioAtualizacao> {
+  const etapas: { nome: string; executar: () => Promise<ItemAtualizacao> }[] = [
+    ...(
+      [
+        ["IGP-M", () => fetchIGPMFromBCB()],
+        ["IPCA", () => fetchSerieBCBGenerica(433, "IPCA")],
+        ["INPC", () => fetchSerieBCBGenerica(188, "INPC")],
+        ["CDI", () => fetchSerieBCBGenerica(4391, "CDI", true)],
+        ["SELIC", () => fetchSerieBCBGenerica(4390, "SELIC", true)],
+        ["TR", () => fetchSerieBCBGenerica(7811, "TR")],
+      ] as [string, () => Promise<IndiceData[]>][]
+    ).map(([nome, buscar]) => ({
+      nome,
+      executar: async (): Promise<ItemAtualizacao> => {
+        const dados = await buscar()
+        if (dados.length === 0) return { nome, ok: false, registros: 0, erro: "BCB não retornou dados" }
+        localStorage.setItem(`indices_${nome}`, JSON.stringify(dados))
+        return { nome, ok: true, registros: dados.length, ultimo: fmtMesAno(dados[dados.length - 1]) }
+      },
+    })),
+    {
+      nome: "Poupança",
+      executar: async () => {
+        const resp = await fetch("/api/poupanca-indices", { cache: "no-store" })
+        if (!resp.ok) return { nome: "Poupança", ok: false, registros: 0, erro: `HTTP ${resp.status}` }
+        const json = await resp.json()
+        const indices: IndiceData[] = Array.isArray(json.indices) ? json.indices : []
+        if (indices.length === 0) return { nome: "Poupança", ok: false, registros: 0, erro: "sem dados" }
+        const item: ItemAtualizacao = { nome: "Poupança", ok: !json.avisoBCB, registros: indices.length, ultimo: fmtMesAno(indices[indices.length - 1]) }
+        if (json.avisoBCB) item.erro = `BCB indisponível: ${json.avisoBCB}`
+        return item
+      },
+    },
+    {
+      nome: "Taxas diárias (SELIC/CDI/TR/Poupança)",
+      executar: async () => {
+        const hoje = new Date()
+        const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 20)
+        const taxas = await obterSerieDiaria(SERIE_SELIC_DIARIA, inicio, hoje)
+        const datas = [...taxas.keys()]
+        if (datas.length === 0) return { nome: "Taxas diárias (SELIC/CDI/TR/Poupança)", ok: false, registros: 0, erro: "BCB não retornou taxas diárias" }
+        return { nome: "Taxas diárias (SELIC/CDI/TR/Poupança)", ok: true, registros: datas.length, ultimo: datas[datas.length - 1] }
+      },
+    },
+  ]
+
+  // Descarta caches de versões antigas antes de gravar os novos
+  try {
+    if (localStorage.getItem(CHAVE_VERSAO_CACHE) !== VERSAO_CACHE_INDICES) {
+      for (const nome of ["IGP-M", "IPCA", "INPC", "CDI", "SELIC", "TR", "Poupança"]) localStorage.removeItem(`indices_${nome}`)
+      localStorage.setItem(CHAVE_VERSAO_CACHE, VERSAO_CACHE_INDICES)
+    }
+  } catch {
+    // armazenamento indisponível
+  }
+
+  const itens: ItemAtualizacao[] = []
+  const total = etapas.length
+  onProgresso?.({ concluidos: 0, total, etapa: "Conectando ao Banco Central..." })
+
+  // Em paralelo, mas o progresso avança a cada etapa concluída
+  let concluidos = 0
+  await Promise.all(
+    etapas.map(async (etapa) => {
+      let item: ItemAtualizacao
+      try {
+        item = await etapa.executar()
+      } catch (erro) {
+        item = { nome: etapa.nome, ok: false, registros: 0, erro: erro instanceof Error ? erro.message : String(erro) }
+      }
+      itens.push(item)
+      concluidos++
+      onProgresso?.({ concluidos, total, etapa: `${item.ok ? "✓" : "⚠"} ${item.nome}${item.ultimo ? ` (até ${item.ultimo})` : ""}` })
+    }),
+  )
+
+  const ordem = etapas.map((e) => e.nome)
+  itens.sort((a, b) => ordem.indexOf(a.nome) - ordem.indexOf(b.nome))
+  const relatorio: RelatorioAtualizacao = {
+    data: new Date().toISOString(),
+    mesReferencia: mesReferenciaAtual(),
+    sucesso: itens.every((i) => i.ok),
+    itens,
+  }
+  try {
+    localStorage.setItem(CHAVE_RELATORIO, JSON.stringify(relatorio))
+    localStorage.setItem("indices_last_update", new Date().toLocaleString("pt-BR"))
+    if (relatorio.sucesso) localStorage.setItem(CHAVE_MES_ATUALIZACAO, relatorio.mesReferencia)
+  } catch {
+    // armazenamento indisponível (modo privativo): o cálculo segue com os dados estáticos
+  }
+  return relatorio
+}
+
+/**
+ * Atualizar índices no cache local antes de cada cálculo.
  * ⚠️ APENAS FUNCIONA EM CLIENTE (typeof window !== "undefined")
  */
-export async function atualizarIndicesNoCache(): Promise<boolean> {
+export async function atualizarIndicesNoCache(onProgresso?: (p: ProgressoAtualizacao) => void): Promise<boolean> {
+  if (typeof window === "undefined") return false
   try {
-    // Verificar se estamos em cliente
-    if (typeof window === "undefined") {
-      console.warn("[CACHE] Tentativa de atualizar cache fora do cliente. Ignorando.")
-      return false
-    }
-
-    console.log("[CACHE] Iniciando atualização de índices...")
-    const indicesObtidos = await fetchAllIndices()
-
-    if (indicesObtidos.successCount === 0) {
-      console.warn("[CACHE] Nenhum índice foi obtido da API")
-      return false
-    }
-
-    // Salvar cada índice no localStorage
-    if (indicesObtidos["IGP-M"].length > 0) {
-      localStorage.setItem("indices_IGP-M", JSON.stringify(indicesObtidos["IGP-M"]))
-      console.log(`[CACHE] ✓ IGP-M: ${indicesObtidos["IGP-M"].length} registros salvos no cache`)
-    }
-
-    // Poupança: remover cache BCB antigo para garantir uso dos dados estáticos corretos
-    localStorage.removeItem("indices_Poupança")
-    console.log("[CACHE] ✓ Poupança: cache BCB removido — usando dados estáticos verificados")
-
-    if (indicesObtidos["IPCA"].length > 0) {
-      localStorage.setItem("indices_IPCA", JSON.stringify(indicesObtidos["IPCA"]))
-      console.log(`[CACHE] ✓ IPCA: ${indicesObtidos["IPCA"].length} registros salvos no cache`)
-    }
-
-    if (indicesObtidos["INPC"].length > 0) {
-      localStorage.setItem("indices_INPC", JSON.stringify(indicesObtidos["INPC"]))
-      console.log(`[CACHE] ✓ INPC: ${indicesObtidos["INPC"].length} registros salvos no cache`)
-    }
-
-    if (indicesObtidos["CDI"].length > 0) {
-      localStorage.setItem("indices_CDI", JSON.stringify(indicesObtidos["CDI"]))
-      console.log(`[CACHE] ✓ CDI: ${indicesObtidos["CDI"].length} registros salvos no cache`)
-    }
-
-    if (indicesObtidos["SELIC"].length > 0) {
-      localStorage.setItem("indices_SELIC", JSON.stringify(indicesObtidos["SELIC"]))
-      console.log(`[CACHE] ✓ SELIC: ${indicesObtidos["SELIC"].length} registros salvos no cache`)
-    }
-
-    if (indicesObtidos["TR"].length > 0) {
-      localStorage.setItem("indices_TR", JSON.stringify(indicesObtidos["TR"]))
-      console.log(`[CACHE] ✓ TR: ${indicesObtidos["TR"].length} registros salvos no cache`)
-    }
-
-    // Salvar timestamp da última atualização
-    localStorage.setItem("indices_timestamp", indicesObtidos.timestamp)
-    localStorage.setItem("indices_last_update", new Date().toLocaleString("pt-BR"))
-
-    console.log(`[CACHE] ✅ Todos os índices atualizados com sucesso (${indicesObtidos.successCount} fontes)`)
-    return true
+    const relatorio = await atualizarIndicesComProgresso(onProgresso)
+    return relatorio.sucesso
   } catch (error) {
     console.error("[CACHE] Erro ao atualizar índices no cache:", error)
     return false
