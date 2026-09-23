@@ -138,22 +138,6 @@ export default function CalculadoraAtualizacaoMonetaria() {
     { valor: "TR (Taxa Referencial)", inicio: "fev/1991", fim: fimDoIndice("TR", false) },
   ]
 
-  const meses = [
-    "Janeiro",
-    "Fevereiro",
-    "Março",
-    "Abril",
-    "Maio",
-    "Junho",
-    "Julho",
-    "Agosto",
-    "Setembro",
-    "Outubro",
-    "Novembro",
-    "Dezembro",
-  ]
-  const dias = Array.from({ length: 31 }, (_, i) => i + 1)
-  const anos = Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i)
   const periodicidades = ["Mensal", "Anual", "Diário", "Trimestral", "Semestral"]
 
   // Função para converter formato brasileiro (296.556,65) para número (296556.65)
@@ -172,6 +156,22 @@ export default function CalculadoraAtualizacaoMonetaria() {
     // 0,05 → 0.05 (mantém como está, será tratado como percentual)
     const normalized = value.trim().replace(/\./g, "").replace(",", ".")
     return Number.parseFloat(normalized)
+  }
+
+  // Campo de calendário usa "AAAA-MM-DD"; o cálculo usa { dia, mes, ano }
+  const dataParaISO = (d: { dia: string; mes: string; ano: string }) =>
+    d.dia && d.mes && d.ano && d.ano.length === 4 ? `${d.ano}-${d.mes.padStart(2, "0")}-${d.dia.padStart(2, "0")}` : ""
+  const definirDataDoCampo = (campo: "dataInicial" | "dataFinal", valorISO: string) => {
+    const [ano, mes, dia] = valorISO ? valorISO.split("-") : ["", "", ""]
+    setFormData((prev) => ({
+      ...prev,
+      [campo]: valorISO ? { dia: String(Number(dia)), mes: String(Number(mes)), ano } : { dia: "", mes: "", ano: "" },
+    }))
+  }
+  // "AAAA-MM-DD" como data LOCAL (new Date("AAAA-MM-DD") seria meia-noite UTC = dia anterior no Brasil)
+  const isoParaDataLocal = (valorISO: string) => {
+    const [ano, mes, dia] = valorISO.split("-").map(Number)
+    return new Date(ano, mes - 1, dia)
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -261,8 +261,8 @@ export default function CalculadoraAtualizacaoMonetaria() {
       taxaJuros: formData.taxaJuros ? parseBrazilianNumber(formData.taxaJuros) : undefined,
       periodicidadeJuros: formData.periodicidadeJuros || undefined,
       tipoJuros: formData.tipoJuros || undefined,
-      dataInicialJuros: formData.dataInicialJuros ? new Date(formData.dataInicialJuros) : undefined,
-      dataFinalJuros: formData.dataFinalJuros ? new Date(formData.dataFinalJuros) : undefined,
+      dataInicialJuros: formData.dataInicialJuros ? isoParaDataLocal(formData.dataInicialJuros) : undefined,
+      dataFinalJuros: formData.dataFinalJuros ? isoParaDataLocal(formData.dataFinalJuros) : undefined,
       percentualMulta: formData.percentualMulta ? parseBrazilianNumber(formData.percentualMulta) : undefined,
       percentualHonorarios: formData.percentualHonorarios
         ? parseBrazilianNumber(formData.percentualHonorarios)
@@ -757,111 +757,34 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div>
-                  <Label className="mb-2 block font-medium">Data Inicial</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Select
-                      value={formData.dataInicial.dia}
-                      onValueChange={(value) => handleInputChange("dataInicial.dia", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Dia" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dias.map((dia) => (
-                          <SelectItem key={dia} value={dia.toString()}>
-                            {dia}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select
-                      value={formData.dataInicial.mes}
-                      onValueChange={(value) => handleInputChange("dataInicial.mes", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Mês" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {meses.map((mes, index) => (
-                          <SelectItem key={index} value={(index + 1).toString()}>
-                            {mes}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select
-                      value={formData.dataInicial.ano}
-                      onValueChange={(value) => handleInputChange("dataInicial.ano", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Ano" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {anos.map((ano) => (
-                          <SelectItem key={ano} value={ano.toString()}>
-                            {ano}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Label htmlFor="dataInicial" className="mb-2 block font-medium">Data Inicial</Label>
+                  <Input
+                    id="dataInicial"
+                    type="date"
+                    min="1900-01-01"
+                    max="2100-12-31"
+                    value={dataParaISO(formData.dataInicial)}
+                    onChange={(e) => definirDataDoCampo("dataInicial", e.target.value)}
+                    aria-describedby="dica-datas"
+                  />
                 </div>
 
                 <div>
-                  <Label className="mb-2 block font-medium">Data Final</Label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Select
-                      value={formData.dataFinal.dia}
-                      onValueChange={(value) => handleInputChange("dataFinal.dia", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Dia" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dias.map((dia) => (
-                          <SelectItem key={dia} value={dia.toString()}>
-                            {dia}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select
-                      value={formData.dataFinal.mes}
-                      onValueChange={(value) => handleInputChange("dataFinal.mes", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Mês" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {meses.map((mes, index) => (
-                          <SelectItem key={index} value={(index + 1).toString()}>
-                            {mes}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Select
-                      value={formData.dataFinal.ano}
-                      onValueChange={(value) => handleInputChange("dataFinal.ano", value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Ano" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {anos.map((ano) => (
-                          <SelectItem key={ano} value={ano.toString()}>
-                            {ano}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <Label htmlFor="dataFinal" className="mb-2 block font-medium">Data Final</Label>
+                  <Input
+                    id="dataFinal"
+                    type="date"
+                    min="1900-01-01"
+                    max="2100-12-31"
+                    value={dataParaISO(formData.dataFinal)}
+                    onChange={(e) => definirDataDoCampo("dataFinal", e.target.value)}
+                    aria-describedby="dica-datas"
+                  />
                 </div>
               </div>
+              <p id="dica-datas" className="text-xs text-gray-500 mt-2">
+                Digite a data (dd/mm/aaaa) ou clique no ícone do calendário para escolher.
+              </p>
             </div>
 
             <Separator className="my-6" />
@@ -940,6 +863,8 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   <Input
                     id="dataInicialJuros"
                     type="date"
+                    min="1900-01-01"
+                    max="2100-12-31"
                     value={formData.dataInicialJuros}
                     onChange={(e) => handleInputChange("dataInicialJuros", e.target.value)}
                   />
@@ -951,6 +876,8 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                   <Input
                     id="dataFinalJuros"
                     type="date"
+                    min="1900-01-01"
+                    max="2100-12-31"
                     value={formData.dataFinalJuros}
                     onChange={(e) => handleInputChange("dataFinalJuros", e.target.value)}
                   />
