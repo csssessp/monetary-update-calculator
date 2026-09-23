@@ -827,6 +827,79 @@ async function fatorDiario(di: DataCalculo, df: DataCalculo, indice: string): Pr
   return r
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FUNDAMENTAÇÃO LEGAL E FONTES OFICIAIS (texto para a memória de cálculo)
+// Transcrições conferidas em planalto.gov.br e metadados do SGS/BCB em 23/09/2026.
+// ═══════════════════════════════════════════════════════════════════════════════
+const URL_LEI_8177 = "https://www.planalto.gov.br/ccivil_03/leis/l8177.htm"
+const URL_LEI_12703 = "https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2012/lei/l12703.htm"
+const URL_CALC_CIDADAO = "https://www3.bcb.gov.br/CALCIDADAO/publico/exibirFormCorrecaoValores.do?method=exibirFormCorrecaoValores"
+const URL_SGS = "https://www3.bcb.gov.br/sgspub/"
+const urlSerie = (serie: number, de?: Date, ate?: Date) =>
+  `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serie}/dados?formato=json` +
+  (de && ate ? `&dataInicial=${fmtCurta(de)}&dataFinal=${fmtCurta(ate)}` : "")
+
+export function fundamentacaoOficial(indice: string, de: DataCalculo, ate: DataCalculo): string[] {
+  const nome = getIndiceNome(indice)
+  const inicio = paraDate(de)
+  const fim = paraDate(ate)
+  const L: string[] = []
+
+  if (nome === "Poupança") {
+    const regraNova = inicio >= INICIO_REGRA_NOVA_POUPANCA
+    const serie = regraNova ? SERIE_POUPANCA_NOVA : SERIE_POUPANCA_ANTIGA
+    L.push(
+      `1) Lei nº 8.177/1991, art. 12 (redação da Lei nº 12.703/2012) — ${URL_LEI_8177}`,
+      `   Caput: "Em cada período de rendimento, os depósitos de poupança serão remunerados: I - como remuneração básica, por taxa correspondente à acumulação das TRD, no período transcorrido entre o dia do último crédito de rendimento, inclusive, e o dia do crédito de rendimento, exclusive; II - como remuneração adicional, por juros de: a) 0,5% (cinco décimos por cento) ao mês, enquanto a meta da taxa Selic ao ano, definida pelo Banco Central do Brasil, for superior a 8,5%; ou b) 70% (setenta por cento) da meta da taxa Selic ao ano, definida pelo Banco Central do Brasil, mensalizada, vigente na data de início do período de rendimento, nos demais casos."`,
+      `   § 2º, I: período de rendimento é "o mês corrido, a partir da data de aniversário da conta de depósito de poupança" (pessoas físicas e entidades sem fins lucrativos).`,
+      `   § 3º: "A data de aniversário da conta de depósito de poupança será o dia do mês de sua abertura, considerando-se a data de aniversário das contas abertas nos dias 29, 30 e 31 como o dia 1º do mês seguinte."`,
+      `   § 4º, I: o crédito dos rendimentos é efetuado "mensalmente, na data de aniversário da conta".`,
+      `   § 5º: "O Banco Central do Brasil divulgará as taxas resultantes da aplicação do contido nas alíneas a e b do inciso II do caput deste artigo."`,
+      `2) Lei nº 12.703/2012 (conversão da MP nº 567/2012) — ${URL_LEI_12703}`,
+      `   Art. 2º: depósitos efetuados até 03/05/2012 são remunerados "pela Taxa Referencial - TR, relativa à data de seu aniversário, acrescida de juros de 0,5% (cinco décimos por cento) ao mês".`,
+      `   Art. 3º: depósitos efetuados a partir de 04/05/2012 seguem a regra do art. 12, II, da Lei nº 8.177/1991 (saldos segregados).`,
+      `   Regra aplicada neste cálculo: ${regraNova ? "NOVA (data inicial a partir de 04/05/2012)" : "ANTIGA (data inicial até 03/05/2012)"}.`,
+      `3) Taxas divulgadas pelo Banco Central (art. 12, § 5º) — Sistema Gerenciador de Séries Temporais (SGS), ${URL_SGS}`,
+      `   Série ${serie}: "Depósitos de poupança ${regraNova ? "a partir de 04.05.2012" : "até 03.05.2012"} - Rentabilidade no período" — periodicidade DIÁRIA, % a.m.: uma taxa para cada data de aniversário (período DD/MM a DD/MM do mês seguinte).`,
+      `   Taxas usadas neste cálculo (conferência): ${urlSerie(serie, inicio, fim)}`,
+      `4) Conferência na Calculadora do Cidadão (BCB): ${URL_CALC_CIDADAO}`,
+      `   Aba "Poupança" → Data inicial ${fmtCurta(inicio)} → Data final ${fmtCurta(fim)} → Regra "${regraNova ? "Nova" : "Antiga"}" → resultado "Índice de correção no período" igual ao fator acima.`,
+      `NOTA: tabelas mensais de poupança (ex.: debit.com.br) publicam a taxa do aniversário no DIA 01 de cada mês. Elas coincidem com este cálculo somente quando o aniversário é no dia 01 (ou nos dias 29, 30 e 31, pelo § 3º).`,
+      `NOTA: para depósitos de pessoa jurídica com fins lucrativos o período de rendimento é trimestral (art. 12, § 2º, II), não coberto por este cálculo mensal.`,
+    )
+  } else if (nome === "TR") {
+    L.push(
+      `1) Lei nº 8.177/1991, art. 1º: "O Banco Central do Brasil divulgará Taxa Referencial (TR) [...]" — ${URL_LEI_8177}`,
+      `2) Série SGS ${SERIE_TR_DIARIA}: "Taxa referencial (TR)" — periodicidade DIÁRIA, % a.m.: uma taxa para cada data de início de período (DD/MM a DD/MM do mês seguinte).`,
+      `   Taxas usadas neste cálculo (conferência): ${urlSerie(SERIE_TR_DIARIA, inicio, fim)}`,
+      `3) Conferência na Calculadora do Cidadão (BCB): ${URL_CALC_CIDADAO}`,
+      `   Aba "TR" → Data do início da série ${fmtCurta(inicio)} → Data do vencimento da série ${fmtCurta(fim)} → resultado igual ao fator acima.`,
+    )
+  } else if (nome === "SELIC" || nome === "CDI") {
+    const serie = nome === "CDI" ? SERIE_CDI_DIARIA : SERIE_SELIC_DIARIA
+    L.push(
+      `1) Série SGS ${serie}: "Taxa de juros - ${nome === "CDI" ? "CDI" : "Selic"}" — periodicidade DIÁRIA, % a.d. (${URL_SGS}).`,
+      `   Taxas usadas neste cálculo (conferência): ${urlSerie(serie, inicio, somarDias(fim, -1))}`,
+      `2) Conferência na Calculadora do Cidadão (BCB): ${URL_CALC_CIDADAO}`,
+      `   Aba "${nome === "CDI" ? "CDI" : "Selic"}" → Data inicial ${fmtCurta(inicio)} → Data final ${fmtCurta(fim)}${nome === "CDI" ? " → Percentual do CDI 100%" : ""} → resultado igual ao fator acima.`,
+    )
+  } else {
+    const info: Record<string, [number, string, string]> = {
+      "IGP-M": [28655, "Índice Geral de Preços do Mercado (IGP-M) - Variação mensal consistente com número índice", "FGV"],
+      IPCA: [433, "Índice nacional de preços ao consumidor-amplo (IPCA)", "IBGE"],
+      INPC: [188, "Índice nacional de preços ao consumidor (INPC)", "IBGE"],
+    }
+    const [serie, titulo, fonte] = info[nome] ?? info["IGP-M"]
+    L.push(
+      `1) Índice produzido por ${fonte}; série SGS ${serie}: "${titulo}" — periodicidade MENSAL (${URL_SGS}).`,
+      `   Valores usados neste cálculo (conferência): ${urlSerie(serie, new Date(de.ano, de.mes - 1, 1), new Date(ate.ano, ate.mes - 1, 1))}`,
+      `2) Conferência na Calculadora do Cidadão (BCB): ${URL_CALC_CIDADAO}`,
+      `   Aba "Índices de preços" → ${nome} → Data inicial ${String(de.mes).padStart(2, "0")}/${de.ano} → Data final ${String(ate.mes).padStart(2, "0")}/${ate.ano} → resultado igual ao fator acima.`,
+    )
+  }
+  return L
+}
+
 export async function calcularFatorPeriodo(di: DataCalculo, df: DataCalculo, indice: string): Promise<FatorPeriodo> {
   const metodologia = metodologiaDoIndice(indice)
   if (metodologia === "aniversario") return fatorAniversario(di, df, indice)
@@ -946,6 +1019,13 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
     memoriaCalculo.push(`Períodos com índice aplicado: ${fp.aplicados} de ${fp.esperados}`)
   }
   for (const aviso of fp.avisos) memoriaCalculo.push(`⚠ ATENÇÃO: ${aviso}`)
+
+  memoriaCalculo.push(``)
+  memoriaCalculo.push(`=== FUNDAMENTAÇÃO LEGAL E FONTES OFICIAIS — ${nomeIndice} ===`)
+  for (const linha of fundamentacaoOficial(parametros.indice, periodoDe, periodoAte)) memoriaCalculo.push(linha)
+  if (deflacao) {
+    memoriaCalculo.push(`NOTA: a Calculadora do Cidadão não calcula deflação; confira o fator do período ${fmtCurta(paraDate(periodoDe))} → ${fmtCurta(paraDate(periodoAte))} e aplique 1 / fator.`)
+  }
 
   let detalhamentoPoupanca: DetalheLinha[] | undefined = undefined
 

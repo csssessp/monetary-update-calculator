@@ -343,7 +343,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
         .logo { height: 80px; margin-bottom: 15px; max-width: 100%; }
         .title { font-size: 24px; font-weight: bold; margin: 10px 0; color: #333; }
         .subtitle { font-size: 16px; color: #666; margin-bottom: 10px; }
-        .memoria-content { font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-line; background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .memoria-content { font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-line; overflow-wrap: anywhere; background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
         .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 10px; }
         @media print { body { margin: 0; } .no-print { display: none; } }
       </style>
@@ -472,7 +472,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
         <div style="font-size: 14px; color: #666;">Data: ${new Date().toLocaleDateString("pt-BR")}</div>
       </div>
 
-      <div style="font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-line; background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+      <div style="font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-line; overflow-wrap: anywhere; background: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
 ${resultado?.memoriaCalculo.join("\n") || ""}
       </div>
 
@@ -1324,7 +1324,7 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
 
                     <div
                       id="memoria-calculo"
-                      className="bg-gray-50 p-4 rounded-lg border font-mono text-sm whitespace-pre-line overflow-x-auto"
+                      className="bg-gray-50 p-4 rounded-lg border font-mono text-sm whitespace-pre-line overflow-x-auto [overflow-wrap:anywhere]"
                     >
                       {resultado.memoriaCalculo.join("\n")}
                     </div>
