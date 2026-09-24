@@ -16,6 +16,7 @@ import { Progress } from "@/components/ui/progress"
 import {
   calcularCorrecaoMonetaria,
   validarDatas,
+  memoriaSemFundamentacao,
   type ParametrosCalculo,
   type ResultadoCalculo,
 } from "@/lib/calculo-monetario"
@@ -48,7 +49,13 @@ interface FormData {
   apresentarMemoria: boolean
   mostrarTransparencia: boolean
   numeroParcelas: string
-  reajustarParcelasComIPCA: boolean
+  reajusteParcelas: "nenhum" | "IGP-M" | "IPCA"
+  dataPrimeiraParcela: string // AAAA-MM-DD; vazio = data final do cálculo
+  parcelamentoRompido: boolean
+  parcelasPagas: string
+  dataAtualizacaoRompimento: string // AAAA-MM-DD; vazio = hoje
+  jurosMoraMensal: string
+  contagemJuros: "dias" | "meses"
 }
 
 export default function CalculadoraAtualizacaoMonetaria() {
@@ -107,7 +114,13 @@ export default function CalculadoraAtualizacaoMonetaria() {
     apresentarMemoria: false,
     mostrarTransparencia: false,
     numeroParcelas: "",
-    reajustarParcelasComIPCA: false,
+    reajusteParcelas: "IGP-M",
+    dataPrimeiraParcela: "",
+    parcelamentoRompido: false,
+    parcelasPagas: "",
+    dataAtualizacaoRompimento: "",
+    jurosMoraMensal: "0,5",
+    contagemJuros: "dias",
   })
 
   const [resultado, setResultado] = useState<ResultadoCalculo | null>(null)
@@ -168,6 +181,13 @@ export default function CalculadoraAtualizacaoMonetaria() {
       [campo]: valorISO ? { dia: String(Number(dia)), mes: String(Number(mes)), ano } : { dia: "", mes: "", ano: "" },
     }))
   }
+  const brl = (v: number) => `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const fmtDataCalc = (d: { dia: number; mes: number; ano: number }) =>
+    `${String(d.dia).padStart(2, "0")}/${String(d.mes).padStart(2, "0")}/${d.ano}`
+  const isoParaDataCalculo = (valorISO: string) => {
+    const [ano, mes, dia] = valorISO.split("-").map(Number)
+    return { dia, mes, ano }
+  }
   // "AAAA-MM-DD" como data LOCAL (new Date("AAAA-MM-DD") seria meia-noite UTC = dia anterior no Brasil)
   const isoParaDataLocal = (valorISO: string) => {
     const [ano, mes, dia] = valorISO.split("-").map(Number)
@@ -208,6 +228,13 @@ export default function CalculadoraAtualizacaoMonetaria() {
       )
       // Avisos começam com "ATENÇÃO" (ex.: deflação) e não bloqueiam; datas inexistentes bloqueiam
       novosErros.push(...errosDatas.filter((e) => !e.startsWith("ATENÇÃO")))
+    }
+    if (formData.numeroParcelas && formData.parcelamentoRompido) {
+      const pagas = Number(formData.parcelasPagas || "0")
+      if (!Number.isInteger(pagas) || pagas < 0 || pagas >= Number(formData.numeroParcelas))
+        novosErros.push("Rompimento: informe quantas parcelas foram pagas (menos que o total de parcelas)")
+      if (!(parseBrazilianNumber(formData.jurosMoraMensal || "0") >= 0))
+        novosErros.push("Rompimento: taxa de juros moratórios inválida")
     }
 
     if (novosErros.length > 0) {
@@ -269,7 +296,19 @@ export default function CalculadoraAtualizacaoMonetaria() {
         : undefined,
       multaSobreJuros: formData.multaSobreJuros,
       numeroParcelas: formData.numeroParcelas ? Number.parseInt(formData.numeroParcelas) : undefined,
-      reajustarParcelasComIPCA: formData.reajustarParcelasComIPCA,
+      reajusteParcelas: formData.reajusteParcelas,
+      dataPrimeiraParcela: formData.dataPrimeiraParcela ? isoParaDataCalculo(formData.dataPrimeiraParcela) : undefined,
+      rompimento:
+        formData.numeroParcelas && formData.parcelamentoRompido
+          ? {
+              parcelasPagas: Number.parseInt(formData.parcelasPagas || "0"),
+              dataAtualizacao: formData.dataAtualizacaoRompimento
+                ? isoParaDataCalculo(formData.dataAtualizacaoRompimento)
+                : { dia: new Date().getDate(), mes: new Date().getMonth() + 1, ano: new Date().getFullYear() },
+              taxaJurosMoraMensal: parseBrazilianNumber(formData.jurosMoraMensal || "0,5"),
+            }
+          : undefined,
+      contagemJuros: formData.contagemJuros,
     }
 
     try {
@@ -277,7 +316,13 @@ export default function CalculadoraAtualizacaoMonetaria() {
       const resultadoCalculo = await calcularCorrecaoMonetaria(parametros)
       console.log("[CALCULAR] Resultado:", resultadoCalculo)
       setResultado(resultadoCalculo)
-      setErros(errosData)
+      // Aviso (não bloqueia): taxa mensal muito baixa costuma ser erro de digitação (ex.: 0,05 em vez de 0,5)
+      const taxaInformada = formData.taxaJuros ? parseBrazilianNumber(formData.taxaJuros) : 0
+      const avisoTaxa =
+        taxaInformada > 0 && taxaInformada < 0.1 && (formData.periodicidadeJuros || "Mensal") === "Mensal"
+          ? [`ATENÇÃO: taxa de juros de ${formData.taxaJuros}% ao mês é muito baixa — confira a digitação (o Parecer AJG nº 573/2007 prevê juros moratórios de 0,5% ao mês).`]
+          : []
+      setErros([...errosData, ...avisoTaxa])
       setMensagemAtualizacao("")
     } catch (error) {
       console.error("[CALCULAR] Erro:", error)
@@ -308,7 +353,13 @@ export default function CalculadoraAtualizacaoMonetaria() {
       apresentarMemoria: false,
       mostrarTransparencia: false,
       numeroParcelas: "",
-      reajustarParcelasComIPCA: false,
+      reajusteParcelas: "IGP-M",
+      dataPrimeiraParcela: "",
+      parcelamentoRompido: false,
+      parcelasPagas: "",
+      dataAtualizacaoRompimento: "",
+      jurosMoraMensal: "0,5",
+      contagemJuros: "dias",
     })
     setResultado(null)
     setErros([])
@@ -357,7 +408,7 @@ export default function CalculadoraAtualizacaoMonetaria() {
       </div>
 
       <div class="memoria-content">
-${resultado?.memoriaCalculo.join("\n") || ""}
+${resultado ? memoriaSemFundamentacao(resultado.memoriaCalculo).join("\n") : ""}
       </div>
 
       <div class="footer">
@@ -813,12 +864,12 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                 <div>
                   <Label htmlFor="taxaJuros" className="mb-2 block">
                     Taxa e período (%)
-                    <span className="text-xs text-gray-500 ml-2">(Ex: 0,05 = 0,05% | 5 = 5%)</span>
+                    <span className="text-xs text-gray-500 ml-2">(Ex: 0,5 = 0,5% | 1 = 1%)</span>
                   </Label>
                   <Input
                     id="taxaJuros"
                     type="text"
-                    placeholder="Digite o valor: 0,05 (para 0,05%) ou 5 (para 5%)"
+                    placeholder="Digite o percentual: 0,5 (para 0,5%) ou 1 (para 1%)"
                     value={formData.taxaJuros}
                     onChange={(e) => handleInputChange("taxaJuros", e.target.value)}
                   />
@@ -884,6 +935,21 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                 </div>
               </div>
               <p className="text-sm text-gray-600 mt-2">(*) Informar apenas se diferentes das datas acima.</p>
+              <div className="mt-4 max-w-md">
+                <Label className="mb-2 block">Contagem do tempo dos juros</Label>
+                <Select
+                  value={formData.contagemJuros}
+                  onValueChange={(value) => handleInputChange("contagemJuros", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dias">Dias corridos (dias ÷ 365)</SelectItem>
+                    <SelectItem value="meses">Meses (pro rata die: meses completos + dias ÷ 30)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <Separator className="my-6" />
@@ -935,9 +1001,10 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
               </h3>
               <div className="p-4 bg-amber-50 rounded-lg border border-amber-200">
                 <p className="text-sm text-gray-600 mb-3">
-                  Divida o valor total corrigido em parcelas. A cada 12 meses, é possível aplicar o IPCA acumulado do período sobre as parcelas:
+                  Divida o valor total atualizado em parcelas. Pelo Parecer AJG nº 573/2007, as parcelas são reajustadas
+                  pelo IGP-M/FGV ao término de cada período de 12 parcelas.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="numeroParcelas" className="text-sm font-medium mb-2 block">
                       Número de Parcelas
@@ -947,26 +1014,104 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
                       type="number"
                       min="1"
                       max="360"
-                      placeholder="Ex: 12, 24, 36... (vazio = sem parcelamento)"
+                      placeholder="Vazio = sem parcelamento"
                       value={formData.numeroParcelas || ""}
                       onChange={(e) => handleInputChange("numeroParcelas", e.target.value)}
                       className="w-full"
                     />
                   </div>
-                  <div className="flex items-center gap-2 mt-6 sm:mt-0 sm:pt-6">
-                    <Checkbox
-                      id="reajustarParcelasComIPCA"
-                      checked={formData.reajustarParcelasComIPCA}
-                      disabled={!formData.numeroParcelas || Number(formData.numeroParcelas) <= 12}
-                      onCheckedChange={(checked) => handleInputChange("reajustarParcelasComIPCA", checked as boolean)}
+                  <div>
+                    <Label htmlFor="dataPrimeiraParcela" className="text-sm font-medium mb-2 block">
+                      Vencimento da 1ª parcela
+                    </Label>
+                    <Input
+                      id="dataPrimeiraParcela"
+                      type="date"
+                      min="1900-01-01"
+                      max="2100-12-31"
+                      value={formData.dataPrimeiraParcela}
+                      onChange={(e) => handleInputChange("dataPrimeiraParcela", e.target.value)}
                     />
-                    <Label htmlFor="reajustarParcelasComIPCA" className="text-sm cursor-pointer">
-                      Reajustar com IPCA a cada 12 meses
-                      {(!formData.numeroParcelas || Number(formData.numeroParcelas) <= 12) && (
-                        <span className="block text-xs text-gray-400">(requer mais de 12 parcelas)</span>
-                      )}
+                    <span className="text-xs text-gray-500">Vazio = data final do cálculo</span>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium mb-2 block">Reajuste a cada 12 parcelas</Label>
+                    <Select
+                      value={formData.reajusteParcelas}
+                      onValueChange={(value) => handleInputChange("reajusteParcelas", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="IGP-M">IGP-M/FGV (Parecer AJG 573/2007)</SelectItem>
+                        <SelectItem value="IPCA">IPCA/IBGE</SelectItem>
+                        <SelectItem value="nenhum">Sem reajuste</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {(!formData.numeroParcelas || Number(formData.numeroParcelas) <= 12) && (
+                      <span className="text-xs text-gray-500">Só se aplica com mais de 12 parcelas</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-amber-200">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="parcelamentoRompido"
+                      checked={formData.parcelamentoRompido}
+                      disabled={!formData.numeroParcelas}
+                      onCheckedChange={(checked) => handleInputChange("parcelamentoRompido", checked as boolean)}
+                    />
+                    <Label htmlFor="parcelamentoRompido" className="text-sm cursor-pointer font-medium">
+                      Parcelamento rompido (parcela não paga — vencimento antecipado da dívida)
                     </Label>
                   </div>
+                  {formData.parcelamentoRompido && formData.numeroParcelas && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
+                      <div>
+                        <Label htmlFor="parcelasPagas" className="text-sm font-medium mb-2 block">
+                          Parcelas pagas
+                        </Label>
+                        <Input
+                          id="parcelasPagas"
+                          type="number"
+                          min="0"
+                          max={Number(formData.numeroParcelas) - 1}
+                          placeholder="Ex: 14"
+                          value={formData.parcelasPagas}
+                          onChange={(e) => handleInputChange("parcelasPagas", e.target.value)}
+                        />
+                        <span className="text-xs text-gray-500">Rompimento = vencimento da parcela seguinte</span>
+                      </div>
+                      <div>
+                        <Label htmlFor="dataAtualizacaoRompimento" className="text-sm font-medium mb-2 block">
+                          Atualizar o saldo até
+                        </Label>
+                        <Input
+                          id="dataAtualizacaoRompimento"
+                          type="date"
+                          min="1900-01-01"
+                          max="2100-12-31"
+                          value={formData.dataAtualizacaoRompimento}
+                          onChange={(e) => handleInputChange("dataAtualizacaoRompimento", e.target.value)}
+                        />
+                        <span className="text-xs text-gray-500">Vazio = hoje</span>
+                      </div>
+                      <div>
+                        <Label htmlFor="jurosMoraMensal" className="text-sm font-medium mb-2 block">
+                          Juros moratórios (% ao mês)
+                        </Label>
+                        <Input
+                          id="jurosMoraMensal"
+                          type="text"
+                          value={formData.jurosMoraMensal}
+                          onChange={(e) => handleInputChange("jurosMoraMensal", e.target.value)}
+                        />
+                        <span className="text-xs text-gray-500">Parecer AJG 573/2007: 0,5% ao mês</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1097,10 +1242,41 @@ ${resultado?.memoriaCalculo.join("\n") || ""}
 
                     <div className="text-xs text-gray-600 p-3 bg-white rounded border border-green-100">
                       <p className="mb-2">
-                        <strong>⚠️ Importante:</strong> Os valores das parcelas variam conforme os reajustes por índice (a cada 12 meses). 
+                        <strong>⚠️ Importante:</strong> Os valores das parcelas variam conforme os reajustes por índice (a cada 12 parcelas).
                         Confira na Memória de Cálculo (abaixo) o cronograma completo com os valores individuais de cada parcela.
                       </p>
+                      {resultado.parcelamento.possuiProvisorias && (
+                        <p className="text-amber-700">
+                          Há parcelas “a reajustar”: dependem de {resultado.parcelamento.reajuste} ainda não publicado — o total é provisório.
+                        </p>
+                      )}
                     </div>
+
+                    {resultado.parcelamento.rompimento && (
+                      <div className="mt-4 p-4 bg-red-50 rounded-lg border border-red-200">
+                        <h4 className="font-semibold mb-3 text-red-900">Rompimento do parcelamento — vencimento antecipado</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                          {[
+                            ["Parcelas pagas / em aberto", `${resultado.parcelamento.rompimento.parcelasPagas} / ${resultado.parcelamento.rompimento.parcelasEmAberto}`],
+                            ["Data do rompimento", fmtDataCalc(resultado.parcelamento.rompimento.dataRompimento)],
+                            ["Saldo vencido antecipadamente", brl(resultado.parcelamento.rompimento.saldoAntecipado)],
+                            [`Saldo atualizado pela Poupança (fator ${resultado.parcelamento.rompimento.fatorPoupanca.toFixed(6).replace(".", ",")})`, brl(resultado.parcelamento.rompimento.saldoCorrigido)],
+                            [`Juros moratórios (${resultado.parcelamento.rompimento.taxaJurosMoraMensal.toString().replace(".", ",")}% a.m. × ${resultado.parcelamento.rompimento.periodoJurosMeses.toFixed(4).replace(".", ",")} meses)`, brl(resultado.parcelamento.rompimento.juros)],
+                          ].map(([rotulo, valor]) => (
+                            <div key={rotulo} className="flex justify-between gap-4">
+                              <span className="text-gray-600">{rotulo}</span>
+                              <span className="font-medium">{valor}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-red-200 flex justify-between">
+                          <span className="font-semibold text-red-900">
+                            Total devido em {fmtDataCalc(resultado.parcelamento.rompimento.dataAtualizacao)}
+                          </span>
+                          <span className="text-xl font-bold text-red-700">{brl(resultado.parcelamento.rompimento.totalDevido)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

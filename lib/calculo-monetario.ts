@@ -42,6 +42,14 @@ import {
   SERIE_SELIC_DIARIA,
   SERIE_CDI_DIARIA,
 } from "./series-diarias"
+import {
+  calcularParcelamento,
+  periodoEmMeses,
+  type ContagemJuros,
+  type IndiceReajusteParcelas,
+  type ResultadoRompimento,
+} from "./parcelamento"
+import { fundamentacaoJuros } from "./fundamentacao"
 
 export interface DataCalculo {
   dia: number
@@ -66,7 +74,15 @@ export interface ParametrosCalculo {
   convencaoDias?: "Actual/365" | "Actual/365.2425"
   numeroParcelas?: number // Número de parcelas para parcelamento
   dataParcelamento?: DataCalculo // Data de REFERÊNCIA para calcular ciclos (usa data atual se não informado)
-  reajustarParcelasComIPCA?: boolean // Aplicar IPCA acumulado a cada 12 meses
+  reajustarParcelasComIPCA?: boolean // legado: equivale a reajusteParcelas = "IPCA"
+  reajusteParcelas?: IndiceReajusteParcelas // índice do reajuste a cada 12 parcelas (Parecer AJG 573/2007: IGP-M)
+  dataPrimeiraParcela?: DataCalculo // vencimento da 1ª parcela (padrão: data final do cálculo)
+  rompimento?: {
+    parcelasPagas: number
+    dataAtualizacao: DataCalculo
+    taxaJurosMoraMensal: number // em % (Parecer AJG 573/2007: 0,5)
+  }
+  contagemJuros?: ContagemJuros // "dias" (dias ÷ 365, padrão) ou "meses" (pro rata die)
 }
 
 export interface DetalheLinha {
@@ -110,6 +126,9 @@ export interface ResultadoCalculo {
     numeroParcelas: number
     valorParcela: number
     valorTotalParcelado: number
+    possuiProvisorias?: boolean
+    reajuste?: IndiceReajusteParcelas
+    rompimento?: ResultadoRompimento
   }
 }
 
@@ -839,6 +858,18 @@ const urlSerie = (serie: number, de?: Date, ate?: Date) =>
   `https://api.bcb.gov.br/dados/serie/bcdata.sgs.${serie}/dados?formato=json` +
   (de && ate ? `&dataInicial=${fmtCurta(de)}&dataFinal=${fmtCurta(ate)}` : "")
 
+// Início da seção de fundamentação na memória de cálculo (o PDF corta a partir daqui)
+export const MARCADOR_FUNDAMENTACAO = "=== FUNDAMENTAÇÃO LEGAL E FONTES OFICIAIS"
+
+/** Memória de cálculo sem a seção de fundamentação legal (usada no PDF) */
+export function memoriaSemFundamentacao(memoria: string[]): string[] {
+  const i = memoria.findIndex((l) => l.startsWith(MARCADOR_FUNDAMENTACAO))
+  if (i < 0) return memoria
+  let fim = i
+  while (fim > 0 && memoria[fim - 1] === "") fim-- // remove linhas em branco antes da seção
+  return memoria.slice(0, fim)
+}
+
 export function fundamentacaoOficial(indice: string, de: DataCalculo, ate: DataCalculo): string[] {
   const nome = getIndiceNome(indice)
   const inicio = paraDate(de)
@@ -1020,11 +1051,10 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   }
   for (const aviso of fp.avisos) memoriaCalculo.push(`⚠ ATENÇÃO: ${aviso}`)
 
-  memoriaCalculo.push(``)
-  memoriaCalculo.push(`=== FUNDAMENTAÇÃO LEGAL E FONTES OFICIAIS — ${nomeIndice} ===`)
-  for (const linha of fundamentacaoOficial(parametros.indice, periodoDe, periodoAte)) memoriaCalculo.push(linha)
+  // Fundamentação vai no FINAL da memória (anexada antes do return)
+  const fundamentacao = [`${MARCADOR_FUNDAMENTACAO} — ${nomeIndice} ===`, ...fundamentacaoOficial(parametros.indice, periodoDe, periodoAte)]
   if (deflacao) {
-    memoriaCalculo.push(`NOTA: a Calculadora do Cidadão não calcula deflação; confira o fator do período ${fmtCurta(paraDate(periodoDe))} → ${fmtCurta(paraDate(periodoAte))} e aplique 1 / fator.`)
+    fundamentacao.push(`NOTA: a Calculadora do Cidadão não calcula deflação; confira o fator do período ${fmtCurta(paraDate(periodoDe))} → ${fmtCurta(paraDate(periodoAte))} e aplique 1 / fator.`)
   }
 
   let detalhamentoPoupanca: DetalheLinha[] | undefined = undefined
@@ -1068,27 +1098,60 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
     tipoTaxaAnual = conv.tipoTaxaAnual
 
     memoriaCalculo.push(`Dias totais (Actual): ${diasTotais} dia(s)`)
-    memoriaCalculo.push(`Convenção de dias: ${convencaoDia}`)
-    memoriaCalculo.push(`Anos exatos: ${anosExatos.toFixed(6)}`)
-    memoriaCalculo.push(`Taxa anual convertida (${tipoTaxaAnual}): ${(taxaAnual * 100).toFixed(6)}%`)
 
-    if ((parametros.tipoJuros || "simples") === "simples") {
-      juros = valorCorrigido * (taxaAnual ?? 0) * (anosExatos ?? 0)
-      memoriaCalculo.push(`Fórmula: Juros simples = Valor corrigido × taxa_anual × anos`)
-      memoriaCalculo.push(
-        `Cálculo: R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} × ${(taxaAnual * 100).toFixed(6)}% × ${anosExatos.toFixed(6)} = R$ ${juros.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
-      )
+    if (parametros.contagemJuros === "meses") {
+      // Contagem em meses: meses completos (aniversário a aniversário) + dias restantes ÷ 30
+      const de = { dia: dataInicioJuros.getDate(), mes: dataInicioJuros.getMonth() + 1, ano: dataInicioJuros.getFullYear() }
+      const ate = { dia: dataFimJuros.getDate(), mes: dataFimJuros.getMonth() + 1, ano: dataFimJuros.getFullYear() }
+      const periodoJuros = periodoEmMeses(de, ate)
+      const simples = (parametros.tipoJuros || "simples") === "simples"
+      const taxaMensal = simples ? taxaAnual / 12 : Math.pow(1 + taxaAnual, 1 / 12) - 1
+      memoriaCalculo.push(`Contagem do tempo: MESES (pro rata die) — ${periodoJuros.mesesCompletos} mês(es) completo(s) + ${periodoJuros.diasRestantes} dia(s) ÷ 30 = ${periodoJuros.meses.toFixed(6)} meses`)
+      memoriaCalculo.push(`Taxa mensal ${simples ? "(simples)" : "(efetiva)"}: ${(taxaMensal * 100).toFixed(6)}%`)
+      if (simples) {
+        juros = valorCorrigido * taxaMensal * periodoJuros.meses
+        memoriaCalculo.push(`Fórmula: Juros simples = Valor corrigido × taxa mensal × meses`)
+        memoriaCalculo.push(
+          `Cálculo: R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} × ${(taxaMensal * 100).toFixed(6)}% × ${periodoJuros.meses.toFixed(6)} = R$ ${juros.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
+        )
+      } else {
+        const montante = valorCorrigido * Math.pow(1 + taxaMensal, periodoJuros.meses)
+        juros = montante - valorCorrigido
+        memoriaCalculo.push(`Fórmula: Juros compostos = Valor corrigido × (1 + taxa mensal)^meses − Valor corrigido`)
+        memoriaCalculo.push(
+          `Cálculo: R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} × (1 + ${(taxaMensal * 100).toFixed(6)}%)^${periodoJuros.meses.toFixed(6)} − principal = R$ ${juros.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
+        )
+      }
     } else {
-      const montante = valorCorrigido * Math.pow(1 + (taxaAnual ?? 0), anosExatos ?? 0)
-      juros = montante - valorCorrigido
-      memoriaCalculo.push(`Fórmula: Juros compostos = M - Principal`)
-      memoriaCalculo.push(
-        `Montante: R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} × (1 + ${(taxaAnual * 100).toFixed(6)}%)^${anosExatos.toFixed(6)} = R$ ${montante.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
-      )
-      memoriaCalculo.push(
-        `Juros: R$ ${montante.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} - R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} = R$ ${juros.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
-      )
+      memoriaCalculo.push(`Contagem do tempo: DIAS CORRIDOS (dias ÷ ${convencaoDia === "Actual/365.2425" ? "365,2425" : "365"})`)
+      memoriaCalculo.push(`Convenção de dias: ${convencaoDia}`)
+      memoriaCalculo.push(`Anos exatos: ${anosExatos.toFixed(6)}`)
+      memoriaCalculo.push(`Taxa anual convertida (${tipoTaxaAnual}): ${(taxaAnual * 100).toFixed(6)}%`)
+
+      if ((parametros.tipoJuros || "simples") === "simples") {
+        juros = valorCorrigido * (taxaAnual ?? 0) * (anosExatos ?? 0)
+        memoriaCalculo.push(`Fórmula: Juros simples = Valor corrigido × taxa_anual × anos`)
+        memoriaCalculo.push(
+          `Cálculo: R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} × ${(taxaAnual * 100).toFixed(6)}% × ${anosExatos.toFixed(6)} = R$ ${juros.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
+        )
+      } else {
+        const montante = valorCorrigido * Math.pow(1 + (taxaAnual ?? 0), anosExatos ?? 0)
+        juros = montante - valorCorrigido
+        memoriaCalculo.push(`Fórmula: Juros compostos = M - Principal`)
+        memoriaCalculo.push(
+          `Montante: R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} × (1 + ${(taxaAnual * 100).toFixed(6)}%)^${anosExatos.toFixed(6)} = R$ ${montante.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
+        )
+        memoriaCalculo.push(
+          `Juros: R$ ${montante.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} - R$ ${valorCorrigido.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} = R$ ${juros.toLocaleString("pt-BR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`,
+        )
+      }
     }
+    fundamentacao.push(
+      ...fundamentacaoJuros({
+        taxaMensal: (parametros.periodicidadeJuros || "Mensal") === "Mensal" ? parametros.taxaJuros : undefined,
+        contagem: parametros.contagemJuros ?? "dias",
+      }),
+    )
   }
 
   // Multa
@@ -1185,144 +1248,41 @@ export async function calcularCorrecaoMonetaria(parametros: ParametrosCalculo): 
   memoriaCalculo.push(`Sistema: Calculadora de Atualização Monetária - CGOF/SP`)
 
   // ═════════════════════════════════════════════════════════════════════════════════
-  // PARCELAMENTO — funciona com qualquer índice; IPCA reajuste a cada 12 meses (opcional)
+  // PARCELAMENTO E ROMPIMENTO — Parecer AJG nº 573/2007 (lib/parcelamento.ts)
   // ═════════════════════════════════════════════════════════════════════════════════
-  let parcelamento: { numeroParcelas: number; valorParcela: number; valorTotalParcelado: number } | undefined
+  let parcelamento: ResultadoCalculo["parcelamento"]
 
   if (parametros.numeroParcelas && parametros.numeroParcelas > 0) {
-    const numeroParcelas = Math.floor(parametros.numeroParcelas)
-    const valorBase = valorTotal
-    const valorParcelaBase = valorBase / numeroParcelas
-    const hoje = new Date()
-    const dataParcelamento = parametros.dataParcelamento || {
-      dia: hoje.getDate(),
-      mes: hoje.getMonth() + 1,
-      ano: hoje.getFullYear(),
-    }
-
-    const nomeMesesFull = [
-      "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-      "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
-    ]
-    const nomeMesesAbrev = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]
-
-    const numCiclos = Math.ceil(numeroParcelas / 12)
-    const ciclos: Array<{
-      numero: number
-      parcelaInicio: number
-      parcelaFim: number
-      dataInicio: DataCalculo
-      dataFim: DataCalculo
-    }> = []
-
-    let mesC = dataParcelamento.mes
-    let anoC = dataParcelamento.ano
-    for (let c = 0; c < numCiclos; c++) {
-      const parcelaInicio = c * 12 + 1
-      const parcelaFim = Math.min((c + 1) * 12, numeroParcelas)
-      const dataInicio: DataCalculo = { dia: dataParcelamento.dia, mes: mesC, ano: anoC }
-      let mesFim = mesC + 11
-      let anoFim = anoC
-      while (mesFim > 12) { mesFim -= 12; anoFim++ }
-      const dataFim: DataCalculo = { dia: dataParcelamento.dia, mes: mesFim, ano: anoFim }
-      ciclos.push({ numero: c + 1, parcelaInicio, parcelaFim, dataInicio, dataFim })
-      mesFim++
-      if (mesFim > 12) { mesFim = 1; anoFim++ }
-      mesC = mesFim
-      anoC = anoFim
-    }
-
-    const fatorIPCAPorCiclo: number[] = [1]
-    let ipcaAcumuladoLabel = ""
-
-    if (parametros.reajustarParcelasComIPCA && numCiclos > 1) {
-      let mesIPCAInicio = dataParcelamento.mes - 12
-      let anoIPCAInicio = dataParcelamento.ano
-      while (mesIPCAInicio <= 0) { mesIPCAInicio += 12; anoIPCAInicio-- }
-      let mesIPCAFim = mesIPCAInicio + 11
-      let anoIPCAFim = anoIPCAInicio
-      while (mesIPCAFim > 12) { mesIPCAFim -= 12; anoIPCAFim++ }
-      const dataIPCAInicio: DataCalculo = { dia: 1, mes: mesIPCAInicio, ano: anoIPCAInicio }
-      const dataIPCAFim: DataCalculo = { dia: 28, mes: mesIPCAFim, ano: anoIPCAFim }
-
-      try {
-        const indicesIPCA = await obterIndicesPeriodo(dataIPCAInicio, dataIPCAFim, "IPCA")
-        if (indicesIPCA.length > 0) {
-          let fatorAcumulado = 1
-          for (const idx of indicesIPCA) {
-            fatorAcumulado *= (1 + idx.valor / 100)
-          }
-          const ipcaAcum = (fatorAcumulado - 1) * 100
-          ipcaAcumuladoLabel = `IPCA acumulado (${nomeMesesAbrev[mesIPCAInicio - 1]}/${anoIPCAInicio} a ${nomeMesesAbrev[mesIPCAFim - 1]}/${anoIPCAFim}, ${indicesIPCA.length} meses): ${ipcaAcum.toFixed(4).replace(".", ",")}%  →  fator: ${fatorAcumulado.toFixed(6)}`
-          let fatorCumulativo = 1
-          for (let c = 1; c < numCiclos; c++) {
-            fatorCumulativo *= fatorAcumulado
-            fatorIPCAPorCiclo.push(fatorCumulativo)
-          }
-        } else {
-          ipcaAcumuladoLabel = "⚠️ Índices IPCA não encontrados para o período de referência — reajuste não aplicado."
-          for (let c = 1; c < numCiclos; c++) fatorIPCAPorCiclo.push(1)
-        }
-      } catch (err) {
-        ipcaAcumuladoLabel = `⚠️ Erro ao buscar IPCA (${err}) — reajuste não aplicado.`
-        for (let c = 1; c < numCiclos; c++) fatorIPCAPorCiclo.push(1)
-      }
-    } else {
-      for (let c = 1; c < numCiclos; c++) fatorIPCAPorCiclo.push(1)
-    }
-
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`═══════════════════════════════════════════════════════════`)
-    memoriaCalculo.push(`PARCELAMENTO EM ${numeroParcelas} PARCELAS`)
-    memoriaCalculo.push(`═══════════════════════════════════════════════════════════`)
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`Valor base (total corrigido): R$ ${valorBase.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-    memoriaCalculo.push(`Parcela base (1º ciclo):      R$ ${valorParcelaBase.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-    memoriaCalculo.push(`Data de início:               ${String(dataParcelamento.dia).padStart(2, "0")}/${String(dataParcelamento.mes).padStart(2, "0")}/${dataParcelamento.ano}`)
-    if (parametros.reajustarParcelasComIPCA) {
-      memoriaCalculo.push(`Reajuste IPCA a cada 12 meses: SIM`)
-      if (ipcaAcumuladoLabel) memoriaCalculo.push(ipcaAcumuladoLabel)
-    } else {
-      memoriaCalculo.push(`Reajuste IPCA a cada 12 meses: NÃO`)
-    }
-    memoriaCalculo.push(``)
-    memoriaCalculo.push(`Parcela | Ciclo | Vencimento  | Valor (R$)`)
-    memoriaCalculo.push(`--------|-------|-------------|------------------------------`)
-
-    const valoresParcelas: number[] = []
-
-    for (const ciclo of ciclos) {
-      const fator = fatorIPCAPorCiclo[ciclo.numero - 1]
-      const valorParcela = valorParcelaBase * fator
-
-      if (ciclo.numero > 1 && parametros.reajustarParcelasComIPCA) {
-        memoriaCalculo.push(`        |       | >>> Reajuste IPCA Ciclo ${ciclo.numero}: ×${fator.toFixed(6)} = R$ ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/parcela`)
-      }
-
-      for (let p = ciclo.parcelaInicio; p <= ciclo.parcelaFim; p++) {
-        valoresParcelas.push(valorParcela)
-        const mesesOffset = p - 1
-        let mesVenc = dataParcelamento.mes + mesesOffset
-        let anoVenc = dataParcelamento.ano
-        while (mesVenc > 12) { mesVenc -= 12; anoVenc++ }
-        const mesAbrev = nomeMesesAbrev[mesVenc - 1]
-        memoriaCalculo.push(`${String(p).padStart(7)} | ${String(ciclo.numero).padStart(5)} | ${mesAbrev}/${anoVenc}     | ${valorParcela.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-      }
-    }
-
-    const totalParcelado = valoresParcelas.reduce((a, b) => a + b, 0)
-    memoriaCalculo.push(`--------|-------|-------------|------------------------------`)
-    memoriaCalculo.push(`  TOTAL |       |             | ${totalParcelado.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-    memoriaCalculo.push(``)
-
+    const reajuste: IndiceReajusteParcelas =
+      parametros.reajusteParcelas ?? (parametros.reajustarParcelasComIPCA ? "IPCA" : "nenhum")
+    const resultadoParcelas = await calcularParcelamento(
+      {
+        valorBase: valorTotal,
+        numeroParcelas: parametros.numeroParcelas,
+        dataPrimeiraParcela: parametros.dataPrimeiraParcela ?? parametros.dataFinal,
+        reajuste,
+        rompimento: parametros.rompimento
+          ? { ...parametros.rompimento, contagemJuros: parametros.contagemJuros ?? "dias" }
+          : undefined,
+      },
+      calcularFatorPeriodo,
+    )
+    memoriaCalculo.push(...resultadoParcelas.memoria)
+    fundamentacao.push(...resultadoParcelas.fundamentacao)
     parcelamento = {
-      numeroParcelas,
-      valorParcela: valoresParcelas[0],
-      valorTotalParcelado: totalParcelado,
+      numeroParcelas: resultadoParcelas.parcelas.length,
+      valorParcela: resultadoParcelas.valorParcelaInicial,
+      valorTotalParcelado: resultadoParcelas.totalParcelado,
+      possuiProvisorias: resultadoParcelas.possuiProvisorias,
+      reajuste,
+      rompimento: resultadoParcelas.rompimento,
     }
   }
 
   console.log("[CALCULO] Função calcularCorrecaoMonetaria concluída com sucesso")
+  memoriaCalculo.push(``)
+  memoriaCalculo.push(...fundamentacao)
+
   return {
     valorOriginal: parametros.valorOriginal,
     valorCorrigido,
